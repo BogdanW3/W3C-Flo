@@ -666,7 +666,7 @@ dependencies = [
 [[package]]
 name = "casclib"
 version = "0.2.1"
-source = "git+https://github.com/wc3tools/casclib-rs.git#98930e47d104bda2f7f1d2aa06ea1170f4ceb6a8"
+source = "git+https://github.com/w3champions/casclib-rs.git#0daf9a33cf468b8d92ee23fe66dbd95b3f1427c9"
 dependencies = [
  "casclib-sys",
  "log",
@@ -676,7 +676,7 @@ dependencies = [
 [[package]]
 name = "casclib-sys"
 version = "0.2.0"
-source = "git+https://github.com/wc3tools/casclib-rs.git#98930e47d104bda2f7f1d2aa06ea1170f4ceb6a8"
+source = "git+https://github.com/w3champions/casclib-rs.git#0daf9a33cf468b8d92ee23fe66dbd95b3f1427c9"
 dependencies = [
  "cmake",
  "libc",

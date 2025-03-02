@@ -48,8 +48,8 @@ members = [
 #stormlib-sys = { path = "../stormlib-rs/crates/stormlib-sys" }
 stormlib = { git = "https://github.com/wc3tools/stormlib-rs.git" }
 stormlib-sys = { git = "https://github.com/wc3tools/stormlib-rs.git" }
-casclib = { git = "https://github.com/wc3tools/casclib-rs.git" }
-casclib-sys = { git = "https://github.com/wc3tools/casclib-rs.git" }
+casclib = { git = "https://github.com/w3champions/casclib-rs.git" }
+casclib-sys = { git = "https://github.com/w3champions/casclib-rs.git" }
 #s2-grpc-utils = { path = "../s2-grpc-utils" }
 s2-grpc-utils = { git = "https://github.com/Ventmere/s2-grpc-utils.git", branch = "0.2" }
 #flo-state = { path = "../flo-state" }
