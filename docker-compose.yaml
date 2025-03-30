@@ -1,0 +1,39 @@
+services:
+  postgres:
+    container_name: flo_psql
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST_AUTH_METHOD: md5
+    image: postgres:13-alpine
+    volumes:
+      - database:/var/lib/postgresql/data
+    ports:
+      - '127.0.0.1:5432:5432'
+    restart: always
+
+  node:
+    container_name: flo-node
+    network_mode: host
+    build:
+      context: .
+      dockerfile: build/node.Dockerfile
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+
+  controller:
+    container_name: flo-controller
+    build:
+      context: .
+      dockerfile: build/controller.Dockerfile
+    network_mode: host
+    depends_on:
+      - postgres
+      - node
+    env_file:
+      - .env
+
+volumes:
+  database:

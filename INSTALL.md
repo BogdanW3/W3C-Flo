@@ -59,7 +59,11 @@ cargo install diesel_cli --no-default-features --features postgres
 
 ### Postgres configuration
 
-Set the postgres db user password
+> [!NOTE]
+> You can also use Docker - `docker-compose up -d postgres`. 
+> You still need to run `diesel setup` to create the schema. 
+
+1. Set the postgres db user password
 
 ```
 sudo -u postgres psql
