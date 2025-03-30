@@ -59,7 +59,11 @@ cargo install diesel_cli --no-default-features --features postgres
 
 ### Postgres configuration
 
-Set the postgres db user password
+> [!NOTE]
+> You can also use Docker - `docker-compose up -d postgres`. 
+> You still need to run `diesel setup` to create the schema. 
+
+1. Set the postgres db user password
 
 ```
 sudo -u postgres psql
@@ -220,6 +224,9 @@ cargo build -p flo-cli --release
 If you receive an error saying something like ```multiple definition of `zlibVersion'``` when building flo-cli, try deleting the `target` directory and then build flo-cli first, then flo-node-service, then flo-controller-service.
 
 ### Run flo-cli
+
+Ensure that the `FLO_CONTROLLER_SECRET` is set to the same value inserted into the `api_client` table earlier.  
+For local development, you can use the default value `1111`: `FLO_CONTROLLER_SECRET=1111 ./target/release/flo-cli`
 
 ```shell
 ./target/release/flo-cli server --help
