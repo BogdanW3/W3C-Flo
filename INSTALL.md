@@ -225,6 +225,9 @@ If you receive an error saying something like ```multiple definition of `zlibVer
 
 ### Run flo-cli
 
+Ensure that the `FLO_CONTROLLER_SECRET` is set to the same value inserted into the `api_client` table earlier.  
+For local development, you can use the default value `1111`: `FLO_CONTROLLER_SECRET=1111 ./target/release/flo-cli`
+
 ```shell
 ./target/release/flo-cli server --help
 ./target/release/flo-cli server list-nodes
