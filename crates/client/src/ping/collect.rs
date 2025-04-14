@@ -13,8 +13,10 @@ use tokio::time::sleep;
 const PACKETS: usize = 3;
 const TIMEOUT: Duration = Duration::from_secs(3);
 const INTERVAL: Duration = Duration::from_secs(60);
+const WARM_UP_PING_INTERVAL: Duration = Duration::from_secs(3);
 const ACTIVE_PING_INTERVAL: Duration = Duration::from_secs(10);
 const ERROR_DELAY: Duration = Duration::from_secs(60);
+const WARMUP_TIMEOUT: Duration = Duration::from_secs(45);
 
 pub struct PingCollectActor {
   sock_addr_string: String,
@@ -28,6 +30,7 @@ pub struct PingCollectActor {
   abort_timeout: Option<AbortHandle>,
   stats: PingStats,
   active: bool,
+  warming_up_abort: Option<AbortHandle>,
 }
 
 impl PingCollectActor {
@@ -44,11 +47,47 @@ impl PingCollectActor {
       abort_timeout: None,
       stats: PingStats::default(),
       active: false,
+      warming_up_abort: None,
+    }
+  }
+
+  // Check if the actor is currently warming up
+  pub fn is_warming_up(&self) -> bool {
+    self.warming_up_abort.is_some()
+  }
+
+  // Set the actor to warming up mode with automatic reset after timeout
+  fn start_warmup(&mut self, ctx: &mut Context<Self>) {
+    // Cancel any existing warmup timer
+    self.reset_warmup();
+
+    tracing::info!(address = self.address_str(), "starting warmup");
+
+    // Set up new timer
+    let addr = ctx.addr();
+    let (future, abort_handle) = abortable(async move {
+      sleep(WARMUP_TIMEOUT).await;
+      addr.notify(WarmupExpired).await.ok();
+    });
+
+    self.warming_up_abort = Some(abort_handle);
+    ctx.spawn(async {
+      future.await.ok();
+    });
+  }
+  
+  // Reset warming up state
+  fn reset_warmup(&mut self) {
+    if let Some(handle) = self.warming_up_abort.take() {
+      tracing::info!(address = self.address_str(), "stopping warmup");
+      handle.abort();
     }
   }
 
   fn interval(&self) -> Duration {
-    if self.active {
+    if self.is_warming_up() {
+      WARM_UP_PING_INTERVAL
+    } else if self.active {
       ACTIVE_PING_INTERVAL
     } else {
       INTERVAL
@@ -167,6 +206,12 @@ impl PingCollectActor {
 #[async_trait]
 impl Actor for PingCollectActor {
   async fn started(&mut self, ctx: &mut Context<Self>) {
+    // Due to the nature of how UDP is designed, we need to warm up with a recurring stream of messages
+    // until the stateful firewalls, anti viruses and NATs will actually allow the responses to pass back to us.
+    // As soon as we have sent enough pings to the server, we should hopefully receive the responses.
+    // This process will be aborted when we receive a valid response or after a certain timespan, whichever comes first.
+    // This ensures that we can reliably open the response channel without consistently hammering the server with pings.
+    self.start_warmup(ctx);
     self.start_ping(ctx);
   }
 }
@@ -285,6 +330,8 @@ impl Handler<PingReply> for PingCollectActor {
           current: finished.current,
           loss_rate: finished.loss_rate,
         };
+        // Reset warming up state after receiving all responses
+        self.reset_warmup();
         self.schedule_next(ctx, self.interval());
       }
     } else {
@@ -356,6 +403,24 @@ impl Handler<SetActive> for PingCollectActor {
   }
 }
 
+struct WarmupExpired;
+
+impl Message for WarmupExpired {
+  type Result = ();
+}
+
+#[async_trait]
+impl Handler<WarmupExpired> for PingCollectActor {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    _: WarmupExpired,
+  ) {
+    tracing::warn!(address = self.address_str(), "Warmup period expired without being reset by a successful ping");
+    self.warming_up_abort = None;
+  }
+}
+
 #[tokio::test]
 #[ignore]
 async fn test_ping_collect() {
@@ -413,4 +478,35 @@ async fn test_ping_collect() {
 
   assert_eq!(stats.loss_rate, 0.0);
   assert!(stats.max.unwrap() <= 1);
+}
+
+#[tokio::test]
+async fn test_warming_up() {
+  use std::net::Ipv4Addr;
+  use tokio::sync::mpsc;
+  use tokio::time::sleep;
+
+  // Setup
+  let (tx, _) = mpsc::channel(1);
+  let sock_addr = SocketAddr::from((Ipv4Addr::new(127, 0, 0, 1), 3552));
+  let mut actor = PingCollectActor::new(tx, sock_addr);
+  let ctx = Context::new();
+  
+  // Initially not warming up
+  assert!(!actor.is_warming_up());
+  
+  // Start warmup
+  actor.start_warmup(&mut ctx);
+  assert!(actor.is_warming_up());
+  
+  // Manual reset
+  actor.reset_warmup();
+  assert!(!actor.is_warming_up());
+  
+  // Start warming up again
+  actor.start_warmup(&mut ctx);
+  assert!(actor.is_warming_up());
+  
+  // Testing auto-reset would require more complex async test setup
+  // which we'll skip for this simplified test
 }
