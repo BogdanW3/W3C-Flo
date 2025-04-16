@@ -153,7 +153,6 @@ impl GameHandler {
           sha1: game.map.sha1.clone(),
           checksum: game.map.checksum,
           path: game.map.path.clone(),
-          twelve_p: game.map.twelve_p,
         }
         .into(),
         slots: game
@@ -505,7 +504,6 @@ pub struct Map {
   pub checksum: u32,
   pub name: String,
   pub path: String,
-  pub twelve_p: bool,
 }
 
 #[derive(Debug, S2ProtoUnpack, SimpleObject)]

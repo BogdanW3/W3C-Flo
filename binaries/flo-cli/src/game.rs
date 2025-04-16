@@ -439,7 +439,6 @@ fn get_map() -> Result<Map> {
         player_set: v.player_set,
       })
       .collect(),
-    twelve_p: map.is_twelve_p(),
   };
   Ok(map)
 }
@@ -477,7 +476,6 @@ fn get_rpg_map() -> Result<Map> {
         player_set: v.player_set,
       })
       .collect(),
-    twelve_p: map.is_twelve_p(),
   };
   Ok(map)
 }

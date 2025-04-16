@@ -1,1 +1,0 @@
-ALTER TABLE game ADD COLUMN map_twelve_p boolean NOT NULL DEFAULT false;

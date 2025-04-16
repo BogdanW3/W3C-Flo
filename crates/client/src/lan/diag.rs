@@ -22,7 +22,6 @@ pub async fn run_test_lobby(
   game_version: String,
   name: &str,
   map_path: &str,
-  map_twelve_p: bool,
   map_width: u16,
   map_height: u16,
   map_checksum: MapChecksum,
@@ -43,7 +42,6 @@ pub async fn run_test_lobby(
       sha1: map_checksum.sha1.to_vec(),
       checksum: 0xFFFFFFFF,
       path: map_path.to_string(),
-      twelve_p: map_twelve_p,
     },
     slots: vec![Slot {
       player: Some(player.clone()),
@@ -64,12 +62,7 @@ pub async fn run_test_lobby(
 
   let info = LanGameInfo {
     game: Arc::new(local_game_from_game_info(1, &game)?),
-    slot_info: crate::lan::game::slot::build_player_slot_info(
-      1,
-      game.random_seed,
-      &game.slots,
-      map_twelve_p,
-    )?,
+    slot_info: crate::lan::game::slot::build_player_slot_info(1, game.random_seed, &game.slots)?,
     map_checksum,
     game_settings: GameSettings {
       game_setting_flags: GameSettingFlags::SPEED_FAST

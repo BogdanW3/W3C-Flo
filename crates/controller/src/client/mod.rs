@@ -25,7 +25,7 @@ use crate::player::state::ping::{GetPlayersPingSnapshot, UpdatePing};
 use flo_net::ping::{PingMsg, PingStream};
 use flo_types::ping::PingStats;
 use futures::{StreamExt, TryStreamExt};
-pub use sender::{PlayerSender, PlayerSenderMessage};
+pub use sender::{PlayerReceiver, PlayerSender, PlayerSenderMessage};
 
 const PING_INTERVAL: Duration = Duration::from_secs(30);
 const PING_TIMEOUT: Duration = Duration::from_secs(5);

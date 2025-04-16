@@ -74,7 +74,6 @@ impl LanGame {
           my_player_id,
           game.random_seed,
           &game.slots,
-          game.map_twelve_p,
         )?,
         game,
         map_checksum,

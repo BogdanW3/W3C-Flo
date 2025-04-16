@@ -129,7 +129,6 @@ where
       SelfPlayer::StreamObserver,
       self.info.random_seed,
       &self.info.slots,
-      self.info.map.twelve_p
     )?;
 
     let mut stream: W3GSStream = loop {

@@ -226,7 +226,6 @@ message Map {
   bytes sha1 = 1;
   uint32 checksum = 2;
   string path = 3;
-  bool twelve_p = 4;
 }
 
 enum GameStatus {

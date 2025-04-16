@@ -35,14 +35,13 @@ pub fn build_player_slot_info<'a, P, S>(
   self_player: P,
   random_seed: i32,
   slots: &'a [S],
-  map_twelve_p: bool
 ) -> Result<LanSlotInfo>
 where
   P: Into<SelfPlayer>,
   S: 'a,
   &'a S: Into<LanGameSlot<'a>>,
 {
-  let flo_ob_slot: usize = if map_twelve_p {11} else {23};
+  const FLO_OB_SLOT: usize = 23;
   let self_player: SelfPlayer = self_player.into();
   let slots: Vec<LanGameSlot> = slots.into_iter().map(Into::into).collect();
 
@@ -59,26 +58,26 @@ where
 
   let flo_ob_slot_occupied = occupied_slots
     .iter()
-    .find(|(idx, _)| *idx == flo_ob_slot)
+    .find(|(idx, _)| *idx == FLO_OB_SLOT)
     .is_some();
 
   let stream_ob_slot = if let SelfPlayer::StreamObserver = self_player {
-    if occupied_slots.len() > (if map_twelve_p {11} else {23}) {
+    if occupied_slots.len() > 23 {
       return Err(Error::FloObserverSlotOccupied);
     }
-    Some(flo_ob_slot)
+    Some(FLO_OB_SLOT)
   } else {
     if flo_ob_slot_occupied {
       None
     } else {
-      Some(flo_ob_slot)
+      Some(FLO_OB_SLOT)
     }
   };
 
   let mut slot_info = {
     let mut b = SlotInfo::build();
     b.random_seed(random_seed)
-      .num_slots(if map_twelve_p {12} else {24})
+      .num_slots(24)
       .num_players(
         occupied_slots
           .iter()

@@ -17,8 +17,6 @@ pub struct Map {
   pub height: u32,
   pub players: Vec<MapPlayer>,
   pub forces: Vec<MapForce>,
-  #[serde(default)]
-  pub twelve_p: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

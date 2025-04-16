@@ -32,7 +32,6 @@ diesel::table! {
         game_version -> Nullable<Text>,
         enable_ping_equalizer -> Bool,
         flo_tv_delay_override_secs -> Nullable<Int4>,
-        map_twelve_p -> Bool,
     }
 }
 

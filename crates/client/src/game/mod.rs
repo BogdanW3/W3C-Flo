@@ -26,6 +26,5 @@ pub fn local_game_from_game_info(player_id: i32, game: &GameInfo) -> Result<Loca
     slots: game.slots.clone(),
     host_player: game.created_by.clone(),
     mask_player_names: game.mask_player_names,
-    map_twelve_p: game.map.twelve_p,
   })
 }

@@ -47,7 +47,6 @@ impl S2ProtoPack<flo_net::proto::flo_connect::GameInfo> for Game {
         sha1: self.map.sha1.to_vec(),
         checksum: self.map.checksum,
         path: self.map.path,
-        twelve_p: self.map.twelve_p,
       }),
       slots: self.slots.pack()?,
       node: self.node.pack()?,
