@@ -288,7 +288,7 @@ async fn run_lobby(
           .await?;
         return Ok(());
       }
-      ProtoBufPayload::PACKET_TYPE_ID | flo_w3gs::protocol::constants::PacketTypeId::ProtoBuf => {
+      ProtoBufPayload::PACKET_TYPE_ID => {
         let req: ProtoBufPayload = p.decode_simple_payload()?;
         tracing::debug!("ProtoBufPayload: {:?}", req);
         match req.message_type_id() {

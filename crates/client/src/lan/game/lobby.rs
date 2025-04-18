@@ -308,7 +308,7 @@ impl<'a> LobbyHandler<'a> {
         let payload: PongToHost = pkt.decode_simple()?;
         let _ping = payload.elapsed_millis(base_t);
       }
-      ProtoBufPayload::PACKET_TYPE_ID | flo_w3gs::protocol::constants::PacketTypeId::ProtoBuf => {
+      ProtoBufPayload::PACKET_TYPE_ID => {
         let payload: ProtoBufPayload = pkt.decode_simple()?;
         match payload.type_id {
           ProtoBufMessageTypeId::Unknown2 => {
