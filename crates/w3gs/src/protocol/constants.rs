@@ -90,6 +90,8 @@ pub enum PacketTypeId {
   PongToHost,
   #[bin(value = 0x48)]
   IncomingAction2,
+  #[bin(value = 0x58)]
+  ProtoBufBad,
   #[bin(value = 0x59)]
   ProtoBuf,
   UnknownValue(u8),

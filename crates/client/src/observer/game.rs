@@ -479,7 +479,7 @@ where
               let payload: MapSize = pkt.decode_simple()?;
               tracing::debug!("<- map size: {:?}", payload);
             }
-            PacketTypeId::ProtoBuf => {
+            PacketTypeId::ProtoBufBad | PacketTypeId::ProtoBuf => {
               let payload: ProtoBufPayload = pkt.decode_simple()?;
               match payload.type_id {
                 ProtoBufMessageTypeId::Unknown2 => {

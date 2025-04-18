@@ -85,6 +85,8 @@ pub enum ActionTypeId {
   Unknown0x75,
   #[bin(value = 0x76)]
   Unknown0x76,
+  #[bin(value = 0x77)]
+  BlzSyncAction2,
   #[bin(value = 0x78)]
   BlzSyncAction,
   #[bin(value = 0x79)]
@@ -210,6 +212,7 @@ action_enum! {
     Unknown0x74(Unknown<2>),
     Unknown0x75(Unknown<2>),
     Unknown0x76(Unknown<10>),
+    BlzSyncAction2(BlzSyncAction),
     BlzSyncAction(BlzSyncAction),
     Unknown0x79(Unknown<17>),
     Unknown0x7A(Unknown<20>),
