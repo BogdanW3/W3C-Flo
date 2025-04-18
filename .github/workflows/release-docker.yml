@@ -46,3 +46,10 @@ jobs:
           push: true
           tags: fluxxu/flo-stats:${{ github.sha }},fluxxu/flo-stats:latest
           file: './build/stats.Dockerfile'
+
+      - name: Build and push - flo-observer
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: fluxxu/flo-observer:${{ github.sha }},fluxxu/flo-observer:latest
+          file: './build/observer.Dockerfile'
