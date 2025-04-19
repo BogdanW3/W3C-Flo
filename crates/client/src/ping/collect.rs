@@ -92,7 +92,7 @@ impl PingCollectActor {
         if !self.is_warming_up {
             if let Some(last_success) = self.last_successful_ping {
                 if Instant::now().duration_since(last_success) > OFFLINE_THRESHOLD {
-                    tracing::info!(address = self.address_str(), "Node offline for too long, restarting warmup");
+                    tracing::info!(address = self.address_str(), "Node is back online after being offline for {:?}s, restarting warmup", Instant::now().duration_since(last_success).as_secs());
                     self.restart_warmup(ctx);
                 }
             }
