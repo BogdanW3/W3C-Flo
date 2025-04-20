@@ -60,7 +60,7 @@ fn regenerate_game_info(
           value.copy_from_slice(&game.map.sha1[..]);
           value
         },
-        checksum: game.map.checksum,
+        checksum: 0xFFFFFFFF,
       },
     ),
   );
