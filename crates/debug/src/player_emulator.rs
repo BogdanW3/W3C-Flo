@@ -145,7 +145,7 @@ impl PlayerEmulator {
         let payload: ChatFromHost = packet.decode_simple()?;
         tracing::debug!("chat from host: {:?}", payload);
       }
-      PacketTypeId::ProtoBufBad | PacketTypeId::ProtoBuf  => {
+      PacketTypeId::ProtoBuf => {
         let payload: ProtoBufPayload = packet.decode_simple()?;
         tracing::debug!("recv protobuf: {:?}", payload.type_id);
       }
@@ -289,7 +289,7 @@ impl<'a> JoinHandler<'a> {
         let payload: ChatFromHost = packet.decode_simple()?;
         tracing::debug!("chat from host: {:?}", payload);
       }
-      PacketTypeId::ProtoBufBad | PacketTypeId::ProtoBuf  => {
+      PacketTypeId::ProtoBuf => {
         let payload: ProtoBufPayload = packet.decode_simple()?;
         tracing::debug!("recv protobuf: {:?}", payload.type_id);
         if payload.type_id == ProtoBufMessageTypeId::PlayerProfile {
