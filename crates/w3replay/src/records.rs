@@ -162,7 +162,14 @@ macro_rules! record_enum {
 
       fn decode<T: Buf>(buf: &mut T) -> Result<Self, BinDecodeError> {
         buf.check_size(1)?;
-        let type_id = RecordTypeId::decode(buf)?;
+        // get the first byte
+        let mut byte = buf.get_u8();
+        if (byte > 0x38) {
+          byte = byte - 1;
+        }
+        let buff = [byte];
+        let mut buf2 = &buff[..];
+        let type_id = RecordTypeId::decode(&mut buf2)?;
         match type_id {
           $(
             RecordTypeId::$type_id => {
