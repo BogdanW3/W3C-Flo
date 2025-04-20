@@ -85,14 +85,8 @@ impl Packet {
       return Err(Error::PayloadSizeOverflow);
     }
 
-    let mut header_type = T::PACKET_TYPE_ID;
-    if header_type == PacketTypeId::ProtoBuf {
-      // ProtoBuf payloads are encoded with a different type id in 2.0.2
-      header_type = PacketTypeId::ProtoBufBad;
-    }
-
     Ok(Packet {
-      header: Header::new(header_type, (buf.len() as u16) + 4),
+      header: Header::new(T::PACKET_TYPE_ID, (buf.len() as u16) + 4),
       payload: buf.freeze(),
     })
   }
@@ -229,7 +223,7 @@ pub struct ProtoBufPayload {
 }
 
 impl PacketPayload for ProtoBufPayload {
-  const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::ProtoBuf;
+  const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::ProtoBufBad;
 }
 
 impl ProtoBufPayload {
