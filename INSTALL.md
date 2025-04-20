@@ -256,3 +256,78 @@ psql -U postgres -d flo -c "select * from node"
 sudo systemctl restart flo-node
 sudo systemctl restart flo-controller
 ```
+
+Mac Installation Guide
+-------------------
+
+### Install Rust
+
+```shell
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.zshrc   # Reload shell
+```
+
+### Install Diesel & Other Dependencies
+
+```shell
+brew install cargo-binstall
+cargo binstall diesel_cli
+brew install pkg-config gcc zlib bzip2 avahi libpq
+```
+
+### Install CMake 3 (not compatible with CMake 4 due to casclib)
+
+```shell
+curl -LO https://cmake.org/files/v3.31/cmake-3.31.6-macos-universal.dmg && hdiutil attach cmake-3.31.6-macos-universal.dmg && sudo cp -R /Volumes/cmake-3.31.6-macos-universal/CMake.app /
+Applications && echo 'export PATH="/Applications/CMake.app/Contents/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+
+```
+
+### Set Environment Variables
+
+```shell
+export LDFLAGS="-L/opt/homebrew/opt/libpq/lib"
+export CPPFLAGS="-I/opt/homebrew/opt/libpq/include"
+export PKG_CONFIG_PATH="/opt/homebrew/opt/libpq/lib/pkgconfig"
+export LIBRARY_PATH="$LIBRARY_PATH:/opt/homebrew/opt/libpq/lib"
+```
+
+### Compile
+
+```shell
+cargo build
+```
+
+Windows Installation Guide
+-------------------
+
+### Install Binstall Package Manager
+
+```powershell
+Set-ExecutionPolicy Unrestricted -Scope Process
+iex (iwr "https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.ps1").Content
+```
+
+### Fix Missing libpq.lib
+
+1. Install PostgreSQL from https://www.postgresql.org/download/windows/
+2. Add PostgreSQL library path to your LIB environment variable:
+   ```powershell
+   $env:LIB += ";C:\Program Files\PostgreSQL\17\lib"
+   ```
+   > [!NOTE]
+   > To make this permanent, add this path to the LIB system environment variable.
+
+### Install Diesel CLI
+
+```powershell
+cargo binstall diesel_cli
+```
+
+### Clone & Setup
+
+Follow the same steps as in the Ubuntu guide for:
+- Cloning the repository
+- Creating the .env file
+- Setting up the database
+- Building and running the services

@@ -33,6 +33,8 @@ impl PingActor {
 
   async fn worker(addr: Addr<Self>, rx: &mut mpsc::Receiver<SendPing>) -> Result<(), PingError> {
     let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await?;
+    let local_addr = socket.local_addr()?;
+    tracing::info!("Bound PingWorker UDP socket to {}", local_addr);
     let mut buf = [0_u8; 4];
     loop {
       tokio::select! {
