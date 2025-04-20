@@ -1625,7 +1625,7 @@ dependencies = [
 
 [[package]]
 name = "flo-client"
-version = "0.18.1"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "async-tungstenite",
@@ -1875,7 +1875,7 @@ dependencies = [
 
 [[package]]
 name = "flo-node"
-version = "0.7.5"
+version = "0.7.4"
 dependencies = [
  "backoff 0.3.0",
  "bytes",
@@ -2198,7 +2198,7 @@ dependencies = [
 
 [[package]]
 name = "flo-worker"
-version = "0.18.1"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "embed-resource",
