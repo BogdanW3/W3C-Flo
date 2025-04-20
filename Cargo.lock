@@ -2198,7 +2198,7 @@ dependencies = [
 
 [[package]]
 name = "flo-worker"
-version = "0.18.0"
+version = "0.18.1"
 dependencies = [
  "anyhow",
  "embed-resource",
