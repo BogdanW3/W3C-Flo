@@ -12,25 +12,27 @@ pub enum ActionTypeId {
   #[bin(value = 0x02)]
   ResumeGame,
   #[bin(value = 0x03)]
-  GameSpeed,
+  SetGameSpeed,
   #[bin(value = 0x04)]
-  GameSpeedIncreasing,
+  IncGameSpeed,
   #[bin(value = 0x05)]
-  GameSpeedDecreasing,
+  DecGameSpeed,
   #[bin(value = 0x06)]
   SaveGame,
   #[bin(value = 0x07)]
   SaveGameFinished,
   #[bin(value = 0x10)]
-  UnitBuildingAbility,
+  UnitOrderBasic,
   #[bin(value = 0x11)]
-  UnitBuildingAbilityTargeted,
+  UnitOrderTargetPoint,
   #[bin(value = 0x12)]
-  UnitBuildingAbilityTargetedId,
+  UnitOrderTargetImage,
   #[bin(value = 0x13)]
-  ItemGivenDropped,
+  UnitOrderTargetImage2,
   #[bin(value = 0x14)]
-  UnitBuildingAbility2Targets2Items,
+  UnitOrderTargetImageFogged,
+  #[bin(value = 0x15)]
+  UnitOrderTargetImageFogged2,
   #[bin(value = 0x16)]
   ChangeSelection,
   #[bin(value = 0x17)]
@@ -38,11 +40,13 @@ pub enum ActionTypeId {
   #[bin(value = 0x18)]
   SelectGroupHotkey,
   #[bin(value = 0x19)]
-  SelectSubgroup114b,
+  SelectSubgroup,
   #[bin(value = 0x1A)]
-  PreSubselection,
+  RefreshSubgroup,
+  #[bin(value = 0x1B)]
+  UnitSelectionEvent,
   #[bin(value = 0x1C)]
-  SelectGroundItem,
+  SelectableSelectionModify,
   #[bin(value = 0x1D)]
   CancelHeroRevival,
   #[bin(value = 0x1E)]
@@ -56,7 +60,13 @@ pub enum ActionTypeId {
   #[bin(value = 0x61)]
   EscPressed,
   #[bin(value = 0x62)]
-  ScenarioTrigger,
+  ResumeTriggerExec,
+  #[bin(value = 0x63)]
+  TriggerSyncReady,
+  #[bin(value = 0x64)]
+  TrackableHit,
+  #[bin(value = 0x65)]
+  TrackableTrack,
   #[bin(value = 0x66)]
   EnterChooseHeroSkillSubmenu,
   #[bin(value = 0x67)]
@@ -64,27 +74,45 @@ pub enum ActionTypeId {
   #[bin(value = 0x68)]
   MinimapSignal,
   #[bin(value = 0x69)]
-  ContinueGameB,
+  DialogButtonClick,
   #[bin(value = 0x6A)]
-  ContinueGameA,
+  DialogClick,
   #[bin(value = 0x6B)]
-  MMDMessage,
-  #[bin(value = 0x1B)]
-  Unknown0x1B,
-  #[bin(value = 0x21)]
-  Unknown0x21,
-  #[bin(value = 0x94)]
-  Unknown0x94,
+  SyncStoreInteger,
   #[bin(value = 0x6C)]
-  Unknown0x6C,
-  #[bin(value = 0x74)]
-  Unknown0x74,
+  SyncStoreReal,
+  #[bin(value = 0x6D)]
+  SyncStoreBoolean,
+  #[bin(value = 0x6E)]
+  SyncStoreUnit,
+  #[bin(value = 0x70)]
+  SyncClearInteger,
+  #[bin(value = 0x71)]
+  SyncClearReal,
+  #[bin(value = 0x72)]
+  SyncClearBoolean,
+  #[bin(value = 0x73)]
+  SyncClearUnit,
   #[bin(value = 0x75)]
-  Unknown0x75,
+  ArrowKey,
+  #[bin(value = 0x76)]
+  Mouse,
+  #[bin(value = 0x77)]
+  W3API,
+  #[bin(value = 0x78)]
+  SyncData,
+  #[bin(value = 0x79)]
+  FrameEvent,
   #[bin(value = 0x7A)]
-  Unknown0x7A,
+  KeyEvent,
   #[bin(value = 0x7B)]
-  Unknown0x7B,
+  CommandClick,
+
+
+  // #[bin(value = 0x94)]
+  // Unknown0x94,
+  // #[bin(value = 0x74)]
+  // Unknown0x74,
   UnknownValue(u8),
 }
 
@@ -163,119 +191,135 @@ macro_rules! action_enum {
 
 action_enum! {
   pub enum Action {
-    PauseGame,
+    PauseGame(PauseGame),
     ResumeGame,
-    GameSpeed(GameSpeed),
-    GameSpeedIncreasing,
-    GameSpeedDecreasing,
+    SetGameSpeed(SetGameSpeed),
+    IncGameSpeed,
+    DecGameSpeed,
     SaveGame(SaveGame),
     SaveGameFinished(SaveGameFinished),
-    UnitBuildingAbility(UnitBuildingAbility),
-    UnitBuildingAbilityTargeted(UnitBuildingAbilityTargeted),
-    UnitBuildingAbilityTargetedId(UnitBuildingAbilityTargetedId),
-    ItemGivenDropped(ItemGivenDropped),
-    UnitBuildingAbility2Targets2Items(UnitBuildingAbility2Targets2Items),
+    UnitOrderBasic(UnitOrderBasic),
+    UnitOrderTargetPoint(UnitOrderTargetPoint),
+    UnitOrderTargetImage(UnitOrderTargetImage),
+    UnitOrderTargetImage2(UnitOrderTargetImage2),
+    UnitOrderTargetImageFogged(UnitOrderTargetImageFogged),
+    UnitOrderTargetImageFogged2(UnitOrderTargetImageFogged2),
     ChangeSelection(ChangeSelection),
     AssignGroupHotkey(AssignGroupHotkey),
     SelectGroupHotkey(SelectGroupHotkey),
-    SelectSubgroup114b(SelectSubgroup114b),
-    PreSubselection,
-    SelectGroundItem(SelectGroundItem),
+    SelectSubgroup(SelectSubgroup),
+    RefreshSubgroup,
+    UnitSelectionEvent(UnitSelectionEvent),
+    SelectableSelectionModify(SelectableSelectionModify),
     CancelHeroRevival(CancelHeroRevival),
     RemoveUnitFromBuildingQueue(RemoveUnitFromBuildingQueue),
     ChangeAllyOptions(ChangeAllyOptions),
     TransferResources(TransferResources),
     MapTriggerChatCommand(MapTriggerChatCommand),
     EscPressed,
-    ScenarioTrigger(ScenarioTrigger),
+    ResumeTriggerExec(ResumeTriggerExec),
+    TriggerSyncReady(TriggerSyncReady),
+    TrackableHit(TrackableHit),
+    TrackableTrack(TrackableTrack),
     EnterChooseHeroSkillSubmenu,
     EnterChooseBuildingSubmenu,
     MinimapSignal(MinimapSignal),
-    ContinueGameB(Unknown<16>),
-    ContinueGameA(Unknown<17>),
-    MMDMessage(MMDMessage),
-    Unknown0x1B(Unknown<10>),
-    Unknown0x21(Unknown<9>),
-    Unknown0x94(Unknown<4>),
-    Unknown0x6C(Unknown<6>),
-    Unknown0x74(Unknown<2>),
-    Unknown0x75(Unknown<2>),
-    Unknown0x7A(Unknown<20>),
-    Unknown0x7B(Unknown<16>)
+    DialogButtonClick(DialogButtonClick),
+    DialogClick(DialogClick),
+    SyncStoreInteger(SyncStoreInteger),
+    SyncStoreReal(SyncStoreReal),
+    SyncStoreBoolean(SyncStoreBoolean),
+    SyncStoreUnit(SyncStoreUnit),
+    SyncClearInteger(SyncCache),
+    SyncClearReal(SyncCache),
+    SyncClearBoolean(SyncCache),
+    SyncClearUnit(SyncCache),
+    ArrowKey(ArrowKey),
+    Mouse(Mouse),
+    W3API(W3API),
+    SyncData(SyncData),
+    FrameEvent(FrameEvent),
+    KeyEvent(KeyEvent),
+    CommandClick(CommandClick)
+
+    // Unknown0x94(Unknown<4>),
+    // Unknown0x74(Unknown<2>),
   }
 }
 
 #[derive(Debug, BinDecode)]
-pub struct GameSpeed {
+pub struct PauseGame {
+  pub no_commands: u8,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct SetGameSpeed {
   pub speed: u8,
 }
 
 #[derive(Debug, BinDecode)]
 pub struct SaveGame {
   pub name: CString,
+  pub filename: CString,
+  pub quicksave: u8,
 }
 
 #[derive(Debug, BinDecode)]
 pub struct SaveGameFinished {
-  _unknown: u32,
+  pub success: u32,
 }
 
 #[derive(Debug, BinDecode)]
-pub struct UnitBuildingAbility {
-  pub ability_flag: u16,
-  pub item_id: u32,
-  _unknown_a: u32,
-  _unknown_b: u32,
+pub struct NetTag {
+  pub tag1: u32,
+  pub tag2: u32,
 }
 
 #[derive(Debug, BinDecode)]
-pub struct UnitBuildingAbilityTargeted {
-  pub ability_flag: u16,
-  pub item_id: u32,
-  _unknown_a: u32,
-  _unknown_b: u32,
-  pub target_x: u32,
-  pub target_y: u32,
+pub struct Vec2 {
+  pub x: f32,
+  pub y: f32,
 }
 
 #[derive(Debug, BinDecode)]
-pub struct UnitBuildingAbilityTargetedId {
-  pub ability_flag: u16,
-  pub item_id: u32,
-  _unknown_a: u32,
-  _unknown_b: u32,
-  pub target_x: u32,
-  pub target_y: u32,
-  pub target_object_id_1: u32,
-  pub target_object_id_2: u32,
+pub struct UnitOrderBasic {
+  pub flags: u16,
+  pub order: u32,
+  pub handle: NetTag,
 }
 
 #[derive(Debug, BinDecode)]
-pub struct ItemGivenDropped {
-  pub ability_flag: u16,
-  pub item_id: u32,
-  _unknown_a: u32,
-  _unknown_b: u32,
-  pub target_x: u32,
-  pub target_y: u32,
-  pub target_object_id_1: u32,
-  pub target_object_id_2: u32,
-  pub item_object_id_1: u32,
-  pub item_object_id_2: u32,
+pub struct UnitOrderTargetPoint {
+  pub base: UnitOrderBasic,
+  pub target: Vec2,
 }
 
 #[derive(Debug, BinDecode)]
-pub struct UnitBuildingAbility2Targets2Items {
-  pub ability_flag: u16,
-  pub item_id: u32,
-  _unknown_a: u32,
-  _unknown_b: u32,
-  pub target_x: u32,
-  pub target_y: u32,
-  pub item_2_id: u32,
-  _unknown_bytes: [u8; 9],
-  pub target_2_x: u32,
-  pub target_2_y: u32,
+pub struct UnitOrderTargetImage {
+  pub base: UnitOrderTargetPoint,
+  pub target_object: NetTag,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct UnitOrderTargetImage2 {
+  pub base: UnitOrderTargetImage,
+  pub object2: NetTag,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct UnitOrderTargetImageFogged {
+  pub base: UnitOrderTargetPoint,
+  pub ghost_image_id: u32,
+  pub ghost_flags: u32,
+  pub ghost_category: u32,
+  pub ghost_owner: u8,
+  pub ghost_position: Vec2,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct UnitOrderTargetImageFogged2 {
+  pub base: UnitOrderTargetImageFogged,
+  pub target_object: NetTag,
 }
 
 #[derive(Debug, BinDecode)]
@@ -283,13 +327,7 @@ pub struct ChangeSelection {
   pub select_mode: u8,
   pub units_buildings_number: u16,
   #[bin(repeat = "units_buildings_number")]
-  pub selected_objects: Vec<ObjectPair>,
-}
-
-#[derive(Debug, BinDecode)]
-pub struct ObjectPair {
-  pub object_id_1: u32,
-  pub object_id_2: u32,
+  pub selected_objects: Vec<NetTag>,
 }
 
 #[derive(Debug, BinDecode)]
@@ -297,30 +335,36 @@ pub struct AssignGroupHotkey {
   pub group_number: u8,
   pub selected_object_number: u16,
   #[bin(repeat = "selected_object_number")]
-  pub selected_objects: Vec<ObjectPair>,
+  pub selected_objects: Vec<NetTag>,
 }
 
 #[derive(Debug, BinDecode)]
 pub struct SelectGroupHotkey {
   pub group_number: u8,
-  _unknown: u8,
+  pub op: u8,
 }
 
 #[derive(Debug, BinDecode)]
-pub struct SelectSubgroup114b {
+pub struct SelectSubgroup {
   pub item_id: u32,
-  pub object: ObjectPair,
+  pub object: NetTag,
 }
 
 #[derive(Debug, BinDecode)]
-pub struct SelectGroundItem {
-  _unknown: u8,
-  pub object: ObjectPair,
+pub struct UnitSelectionEvent {
+  pub op: u8,
+  pub object: NetTag,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct SelectableSelectionModify {
+  pub op: u8,
+  pub object: NetTag,
 }
 
 #[derive(Debug, BinDecode)]
 pub struct CancelHeroRevival {
-  pub object: ObjectPair,
+  pub object: NetTag,
 }
 
 #[derive(Debug, BinDecode)]
@@ -344,31 +388,180 @@ pub struct TransferResources {
 
 #[derive(Debug, BinDecode)]
 pub struct MapTriggerChatCommand {
-  _unknown_a: u32,
-  _unknown_b: u32,
+  pub trigger: NetTag,
   pub chat_command: CString,
 }
 
 #[derive(Debug, BinDecode)]
-pub struct ScenarioTrigger {
-  _unknown_a: u32,
-  _unknown_b: u32,
-  _unknown_counter: u32,
+pub struct ResumeTriggerExec {
+  pub trigger: NetTag,
+  pub sleep_id: u32,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct TriggerSyncReady {
+  pub trigger: NetTag,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct TrackableHit {
+  pub trackable: NetTag,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct TrackableTrack {
+  pub trackable: NetTag,
 }
 
 #[derive(Debug, BinDecode)]
 pub struct MinimapSignal {
-  pub location_x: u32,
-  pub location_y: u32,
-  _unknown: u32,
+  pub location: Vec2,
+  pub duration: f32,
 }
 
 #[derive(Debug, BinDecode)]
-pub struct MMDMessage {
-  pub name: CString,
-  pub checksum: CString,
-  pub second_checksum: CString,
-  pub weak_checksum: u32,
+pub struct DialogButtonClick {
+  _unknown_a: NetTag,
+  _unknown_b: NetTag,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct DialogClick {
+  _unknown_a: NetTag,
+  _unknown_b: NetTag,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct SyncCache {
+  pub campaign_key: CString,
+  pub mission_key: CString,
+  pub key: CString,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct SyncStoreInteger {
+  pub cache: SyncCache,
+  pub val: u32,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct SyncStoreReal {
+  pub cache: SyncCache,
+  pub val: f32,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct SyncStoreBoolean {
+  pub cache: SyncCache,
+  pub val: u32,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct SyncAbility {
+  pub ability_id: u32,
+  pub level: u32,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct SyncItem {
+  pub item_id: u32,
+  pub charges: u32,
+  pub flags: u32,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct SyncHeroData {
+  pub xp: u32,
+  pub level: u32,
+  pub skill_points: u32,
+  pub proper_name_id: u32,
+  pub str: u32,
+  pub str_bonus: f32,
+  pub agi: u32,
+  pub speed_mod: f32,
+  pub cooldown_mod: f32,
+  pub agi_bonus: f32,
+  pub intel: u32,
+  pub int_bonus: f32,
+  pub hero_abil_count: u32,
+  #[bin(repeat = "hero_abil_count")]
+  pub hero_abils: Vec<SyncAbility>,
+  pub max_life: f32,
+  pub max_mana: f32,
+  // >= 6030
+  pub sight: f32,
+  pub damage_count: u32,
+  #[bin(repeat = "damage_count")]
+  pub damage: Vec<u32>,
+  pub defense: f32,
+  // >= 6031
+  pub control_groups: u16,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct SyncUnit {
+  pub unit_id: u32,
+  pub item_count: u32,
+  #[bin(repeat = "item_count")]
+  pub items: Vec<SyncItem>,
+  pub hero_data: SyncHeroData,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct SyncStoreUnit {
+  pub cache: SyncCache,
+  pub val: SyncUnit,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct ArrowKey {
+  pub event: u8,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct Mouse {
+  pub event: u8,
+  pub position: Vec2,
+  pub button: u8,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct W3API {
+  pub command: u32,
+  pub data: u32,
+  pub buffer_length: u32,
+  #[bin(repeat = "buffer_length")]
+  pub buffer: Vec<u8>,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct SyncData {
+  pub prefix: CString,
+  pub data: CString,
+  pub from_server: u32,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct FrameEvent {
+  pub frame: NetTag,
+  pub event: u32,
+  pub event_data: f32,
+  pub event_data2: CString,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct KeyEvent {
+  pub unknown: NetTag,
+  pub event: u32,
+  pub key: u32,
+  pub meta_key: u32,
+}
+
+#[derive(Debug, BinDecode)]
+pub struct CommandClick {
+  pub unknown: NetTag,
+  pub ability_id: u32,
+  pub order_id: u32,
 }
 
 #[derive(Debug)]
