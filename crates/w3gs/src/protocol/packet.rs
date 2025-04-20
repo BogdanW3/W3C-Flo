@@ -223,7 +223,7 @@ pub struct ProtoBufPayload {
 }
 
 impl PacketPayload for ProtoBufPayload {
-  const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::ProtoBufBad;
+  const PACKET_TYPE_ID: PacketTypeId = PacketTypeId::ProtoBuf;
 }
 
 impl ProtoBufPayload {
