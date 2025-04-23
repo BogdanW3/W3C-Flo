@@ -2,8 +2,10 @@ use super::{PingError, SendPing};
 use flo_state::{async_trait, Actor, Addr, Context, Handler, Message};
 use flo_types::ping::PingStats;
 use futures::future::AbortHandle;
+use rand::Rng;
 use std::collections::{BTreeMap, VecDeque};
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::error::SendTimeoutError;
 use tokio::sync::mpsc::Sender;
@@ -27,17 +29,25 @@ pub struct PingCollectActor {
   sock_addr_string: String,
   sock_addr: SocketAddr,
   results: VecDeque<PingResult>,
-  in_flight_pings: BTreeMap<u32, AbortHandle>, // Map of timestamp -> timeout handle
+  in_flight_pings: BTreeMap<u32, (AbortHandle, u8)>, // Map of timestamp -> (timeout handle, send_counter)
   sender: Sender<SendPing>,
   ping_now_tx: Option<watch::Sender<bool>>, // Signal to wake up the main loop
   cached_stats: Option<PingStats>,          // Last computed stats
   is_warming_up: bool,
   is_active: bool,
   last_successful_ping: Option<Instant>, // When we last got a successful ping
+  random_id: [u8; 3],                    // Random 3-byte identifier for this actor
+  send_counter: AtomicU8,                // Rolling counter for sent pings
 }
 
 impl PingCollectActor {
   pub fn new(sender: Sender<SendPing>, sock_addr: SocketAddr) -> Self {
+    // Generate a random 3-byte identifier
+    let mut random_id = [0u8; 3];
+    rand::thread_rng().fill(&mut random_id[..]);
+    // Initialize send_counter with a random value
+    let initial_counter = rand::thread_rng().gen::<u8>();
+
     Self {
       sender,
       sock_addr_string: format!("{}", sock_addr),
@@ -49,6 +59,8 @@ impl PingCollectActor {
       is_warming_up: false,
       is_active: false,
       last_successful_ping: None,
+      random_id,
+      send_counter: AtomicU8::new(initial_counter),
     }
   }
 
@@ -210,9 +222,18 @@ impl PingCollectActor {
       .unwrap_or_else(|_| Duration::from_secs(0))
       .as_millis() as u32;
 
-    // Create the ping packet with the timestamp
-    let mut buf = [0_u8; 4];
-    buf.copy_from_slice(&now_ms.to_le_bytes());
+    // Atomically load and increment the send counter (wraps around on overflow)
+    let current_send_counter = self.send_counter.fetch_add(1, Ordering::Relaxed);
+
+    // Create the ping packet (8 bytes total):
+    // [0..4]: timestamp (u32)
+    // [4]: send_counter (u8)
+    // [5..8]: random_id ([u8; 3])
+    let mut buf = [0_u8; 8];
+    buf[0..4].copy_from_slice(&now_ms.to_le_bytes());
+    buf[4] = current_send_counter;
+    buf[5..8].copy_from_slice(&self.random_id);
+
     // Send the ping
     match self
       .sender
@@ -239,8 +260,10 @@ impl PingCollectActor {
           addr.send(PingTimeout { timestamp: now_ms }).await.ok();
         });
 
-        // Store the abort handle
-        self.in_flight_pings.insert(now_ms, abort_handle);
+        // Store the abort handle and the send_counter for this specific ping
+        self
+          .in_flight_pings
+          .insert(now_ms, (abort_handle, current_send_counter));
 
         // Spawn the timeout task
         ctx.spawn(async {
@@ -323,8 +346,13 @@ impl Actor for PingCollectActor {
     let addr = ctx.addr().clone();
     let sock_addr_str = self.sock_addr_string.clone();
 
+    // Generate the random delay value outside the async block
+    let random_delay = rand::thread_rng().gen_range(1..1000);
+
     ctx.spawn(async move {
-      Self::run_ping_loop(addr, sock_addr_str, rx).await;
+      // Introduce a random delay since we're publishing via a single socket
+      tokio::time::sleep(Duration::from_millis(random_delay)).await;
+      return Self::run_ping_loop(addr, sock_addr_str, rx).await;
     });
   }
 }
@@ -424,7 +452,9 @@ impl Handler<PingTimeout> for PingCollectActor {
     PingTimeout { timestamp }: PingTimeout,
   ) -> <PingTimeout as Message>::Result {
     // Only process if this ping is still in flight
-    if self.in_flight_pings.remove(&timestamp).is_some() {
+    if let Some((abort_handle, _)) = self.in_flight_pings.remove(&timestamp) {
+      // Although the timeout future already completed, explicitly aborting is good practice
+      abort_handle.abort();
       self.add_result(None, ctx);
     } else {
       tracing::debug!(
@@ -437,7 +467,7 @@ impl Handler<PingTimeout> for PingCollectActor {
 }
 
 // Handle ping replies
-pub struct PingReply(pub [u8; 4]);
+pub struct PingReply(pub [u8; 8], pub u32);
 impl Message for PingReply {
   type Result = ();
 }
@@ -447,34 +477,84 @@ impl Handler<PingReply> for PingCollectActor {
   async fn handle(
     &mut self,
     ctx: &mut Context<Self>,
-    PingReply(bytes): PingReply,
+    PingReply(bytes, receive_timestamp): PingReply,
   ) -> <PingReply as Message>::Result {
-    // Extract timestamp from reply
-    let sent_time = u32::from_le_bytes(bytes);
-    let now = SystemTime::now()
-      .duration_since(UNIX_EPOCH)
-      .unwrap_or_else(|_| Duration::from_secs(0))
-      .as_millis() as u32;
+    // Extract data from the 8-byte reply:
+    // [0..4]: timestamp (u32)
+    // [4]: send_counter (u8)
+    // [5..8]: random_id ([u8; 3])
+    let mut timestamp_bytes = [0_u8; 4];
+    timestamp_bytes.copy_from_slice(&bytes[0..4]);
+    let sent_time = u32::from_le_bytes(timestamp_bytes);
 
-    // Calculate RTT if we have this ping in flight
-    if self.in_flight_pings.remove(&sent_time).is_some() {
-      if sent_time <= now {
-        let rtt = now - sent_time;
-        self.add_result(Some(rtt), ctx);
-      } else {
-        tracing::debug!(
+    let received_send_counter = bytes[4];
+
+    let mut id_bytes = [0u8; 3];
+    id_bytes.copy_from_slice(&bytes[5..8]);
+
+    // Verify that the random ID matches
+    if id_bytes != self.random_id {
+      tracing::error!(
+        address = self.address_str(),
+        timestamp = sent_time,
+        expected_id = ?self.random_id,
+        received_id = ?id_bytes,
+        "Received ping reply with incorrect random ID"
+      );
+      return;
+    }
+
+    let rtt = receive_timestamp.saturating_sub(sent_time); // Use saturating_sub for safety
+
+    // Check if the ping is still in flight using the timestamp, but don't remove it yet.
+    if let Some((_, expected_send_counter)) = self.in_flight_pings.get(&sent_time) {
+      // Verify the send_counter first.
+      if received_send_counter != *expected_send_counter {
+        tracing::error!(
           address = self.address_str(),
           timestamp = sent_time,
-          current_time = now,
-          "Invalid timestamp in reply (timestamp > current time)"
+          expected_counter = *expected_send_counter,
+          received_counter = received_send_counter,
+          "Received ping reply with incorrect send counter. Ignoring."
         );
-        self.add_result(None, ctx);
+        // Don't remove the entry, don't add result.
+        return;
+      }
+
+      // Counter matches, now remove the entry.
+      // We need to re-fetch it because the map might have changed between the get and remove.
+      // This should always succeed since we just checked it exists and didn't yield control.
+      if let Some((abort_handle, _)) = self.in_flight_pings.remove(&sent_time) {
+        // Abort the corresponding timeout task.
+        abort_handle.abort();
+        // Proceed with adding the result if the timestamp is valid.
+        if sent_time <= receive_timestamp {
+          self.add_result(Some(rtt), ctx);
+        } else {
+          tracing::error!(
+            address = self.address_str(),
+            timestamp = sent_time,
+            current_time = receive_timestamp,
+            rtt = rtt,
+            "Invalid timestamp in reply (timestamp > current time)"
+          );
+        }
+      } else {
+        // This case should theoretically not happen if the code runs sequentially
+        tracing::warn!(
+          address = self.address_str(),
+          timestamp = sent_time,
+          "In-flight ping disappeared between check and remove. Race condition?"
+        );
       }
     } else {
       tracing::debug!(
         address = self.address_str(),
         timestamp = sent_time,
-        "Received reply for unknown ping timestamp"
+        rtt = rtt,
+        received_send_counter = received_send_counter,
+        current_send_counter = self.send_counter.load(Ordering::Relaxed),
+        "Received reply for already processed ping timestamp - UDP duplicate?"
       );
     }
   }

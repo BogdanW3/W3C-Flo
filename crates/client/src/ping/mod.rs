@@ -7,7 +7,7 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
@@ -35,14 +35,14 @@ impl PingActor {
     let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await?;
     let local_addr = socket.local_addr()?;
     tracing::info!("Bound PingWorker UDP socket to {}", local_addr);
-    let mut buf = [0_u8; 4];
+    let mut buf = [0_u8; 8];
     loop {
       tokio::select! {
         Some(SendPing { to, data }) = rx.recv() => {
           socket.send_to(&data, to).await?;
         }
         Ok((size, from)) = socket.recv_from(&mut buf) => {
-          if size == 4 {
+          if size == 8 {
             addr.send(RecvPong {
               from,
               data: buf
@@ -79,12 +79,12 @@ impl Actor for PingActor {
 
 pub struct SendPing {
   to: SocketAddr,
-  data: [u8; 4],
+  data: [u8; 8],
 }
 
 struct RecvPong {
   from: SocketAddr,
-  data: [u8; 4],
+  data: [u8; 8],
 }
 
 impl Message for RecvPong {
@@ -98,8 +98,14 @@ impl Handler<RecvPong> for PingActor {
     _: &mut Context<Self>,
     RecvPong { from, data }: RecvPong,
   ) -> <RecvPong as Message>::Result {
+    let now = SystemTime::now();
+    let now_ms = now
+      .duration_since(UNIX_EPOCH)
+      .unwrap_or_else(|_| Duration::from_secs(0))
+      .as_millis() as u32;
+    // Record current timestamp to not be impacted by processing delays
     if let Some(v) = self.map.get_mut(&from) {
-      v.notify(PingReply(data)).await.ok();
+      v.notify(PingReply(data, now_ms)).await.ok();
     }
   }
 }

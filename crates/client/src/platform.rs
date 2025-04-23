@@ -424,7 +424,7 @@ async fn load(
 
     let info = ClientPlatformInfo::with_config(&config).map_err(|e| match e {
       PlatformError::NoInstallationFolder => PlatformStateError::InstallationPath,
-      PlatformError::NoUserDataPath => PlatformStateError::InstallationPath,
+      PlatformError::NoUserDataPath => PlatformStateError::UserDataPath,
       e => {
         tracing::error!("init platform info: {}", e);
         PlatformStateError::Internal
