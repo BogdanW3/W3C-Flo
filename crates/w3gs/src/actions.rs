@@ -97,15 +97,15 @@ pub enum ActionTypeId {
   ArrowKey,
   #[bin(value = 0x76)]
   Mouse,
+  // #[bin(value = 0x77)]
+  // W3API,
   #[bin(value = 0x77)]
-  W3API,
-  #[bin(value = 0x78)]
   SyncData,
-  #[bin(value = 0x79)]
+  #[bin(value = 0x78)]
   FrameEvent,
-  #[bin(value = 0x7A)]
+  #[bin(value = 0x79)]
   KeyEvent,
-  #[bin(value = 0x7B)]
+  #[bin(value = 0x7A)]
   CommandClick,
 
 
@@ -152,7 +152,15 @@ macro_rules! action_enum {
 
       fn decode<T: Buf>(buf: &mut T) -> Result<Self, BinDecodeError> {
         buf.check_size(1)?;
-        let type_id = ActionTypeId::decode(buf)?;
+
+        // Read the first byte to get the action type id
+        let mut byte = buf.get_u8();
+        if (byte > 0x77) {
+          byte = byte - 1;
+        }
+        let buf2 = [byte];
+        let mut buff = &buf2[..];
+        let type_id = ActionTypeId::decode(&mut buff)?;
         match type_id {
           $(
             action_enum!(@TYPE_ID $type_id, $($data),*) =>
@@ -236,7 +244,7 @@ action_enum! {
     SyncClearUnit(SyncCache),
     ArrowKey(ArrowKey),
     Mouse(Mouse),
-    W3API(W3API),
+    //W3API(W3API),
     SyncData(SyncData),
     FrameEvent(FrameEvent),
     KeyEvent(KeyEvent),
@@ -525,14 +533,14 @@ pub struct Mouse {
   pub button: u8,
 }
 
-#[derive(Debug, BinDecode)]
-pub struct W3API {
-  pub command: u32,
-  pub data: u32,
-  pub buffer_length: u32,
-  #[bin(repeat = "buffer_length")]
-  pub buffer: Vec<u8>,
-}
+// #[derive(Debug, BinDecode)]
+// pub struct W3API {
+//   pub command: u32,
+//   pub data: u32,
+//   pub buffer_length: u32,
+//   #[bin(repeat = "buffer_length")]
+//   pub buffer: Vec<u8>,
+// }
 
 #[derive(Debug, BinDecode)]
 pub struct SyncData {

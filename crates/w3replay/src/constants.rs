@@ -33,7 +33,7 @@ pub enum RecordTypeId {
   Desync,
   #[bin(value = 0x2F)]
   EndTimer,
-  #[bin(value = 0x39)]
+  #[bin(value = 0x38)]
   ProtoBuf,
   UnknownValue(u8),
 }
