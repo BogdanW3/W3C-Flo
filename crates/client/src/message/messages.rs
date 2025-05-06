@@ -76,6 +76,7 @@ pub enum OutgoingMessage {
   WatchGameSetSpeedError(ErrorMessage),
   LanGameJoined(LanGameJoined),
   GenericFloError(GenericFloError),
+  MdnsError(ErrorMessage),
 }
 
 impl FromStr for IncomingMessage {
@@ -124,25 +125,25 @@ impl ErrorMessage {
 
 #[derive(Debug, Serialize, Clone)]
 pub enum GenericFloErrorCode {
-    Unknown = 0,
-    GamefilesCorrupted = 1,
-    ProcessAccessBlocked = 2,
-    NetworkAccessBlocked = 3,
+  Unknown = 0,
+  GamefilesCorrupted = 1,
+  ProcessAccessBlocked = 2,
+  NetworkAccessBlocked = 3,
 }
 
 #[derive(Debug, Serialize, Clone)]
 pub struct GenericFloError {
-    pub message: String,
-    pub code: GenericFloErrorCode,
+  pub message: String,
+  pub code: GenericFloErrorCode,
 }
 
 impl GenericFloError {
-    pub fn new<T: ToString>(m: T, c: GenericFloErrorCode) -> Self {
-        GenericFloError {
-            message: m.to_string(),
-            code: c,
-        }
+  pub fn new<T: ToString>(m: T, c: GenericFloErrorCode) -> Self {
+    GenericFloError {
+      message: m.to_string(),
+      code: c,
     }
+  }
 }
 
 #[derive(Debug, Deserialize, Clone)]

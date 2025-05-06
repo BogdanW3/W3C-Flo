@@ -269,6 +269,10 @@ pub enum LanEvent {
     game_id: i32,
     inner: NodeStreamEvent,
   },
+  MdnsError {
+    game_id: i32,
+    error: String,
+  },
 }
 
 impl Message for LanEvent {

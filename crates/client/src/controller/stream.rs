@@ -14,6 +14,7 @@ use flo_state::{async_trait, Actor, Addr, Context, Handler, Message};
 use flo_types::game::*;
 use s2_grpc_utils::S2ProtoPack;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -30,6 +31,7 @@ pub struct ControllerStream {
   current_game_info: Option<Arc<LocalGameInfo>>,
   platform: Addr<Platform>,
   nodes: Addr<NodeRegistry>,
+  is_shutting_down: Arc<AtomicBool>,
 }
 
 impl ControllerStream {
@@ -52,6 +54,7 @@ impl ControllerStream {
       current_game_info: None,
       platform,
       nodes,
+      is_shutting_down: Arc::new(AtomicBool::new(false)),
     }
   }
 
@@ -429,6 +432,13 @@ impl ControllerStream {
   }
 }
 
+impl Drop for ControllerStream {
+  fn drop(&mut self) {
+    self.is_shutting_down.store(true, Ordering::SeqCst);
+    tracing::info!("ControllerStream dropped");
+  }
+}
+
 #[async_trait]
 impl Actor for ControllerStream {
   async fn started(&mut self, ctx: &mut Context<Self>) {
@@ -464,12 +474,17 @@ impl Actor for ControllerStream {
         let owner = ctx.addr();
         let parent = self.parent.clone();
         let nodes = self.nodes.clone();
+        let is_shutting_down = self.is_shutting_down.clone();
         async move {
           if let Err(err) =
             Self::connect_and_serve(id, &domain, token, frame_rx, owner, parent.clone(), nodes)
               .await
           {
-            tracing::error!("controller stream error: {}", err);
+            if is_shutting_down.load(Ordering::SeqCst) && matches!(err, Error::TaskCancelled(_)) {
+              tracing::debug!("controller stream cancelled during shutdown: {}", err);
+            } else {
+              tracing::error!("controller stream error: {}", err);
+            }
 
             SendWs::new(
               id,

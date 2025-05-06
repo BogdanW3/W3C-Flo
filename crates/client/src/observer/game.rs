@@ -2,7 +2,7 @@ use super::send_queue::SendQueue;
 use crate::error::{Error, Result};
 use crate::lan::game::slot::{LanSlotInfo, SelfPlayer};
 use crate::platform::{GetClientPlatformInfo, OpenMap, Platform};
-use flo_lan::MdnsPublisher;
+use flo_lan::{MdnsEvent, MdnsPublisher};
 use flo_observer::record::GameRecordData;
 use flo_state::Addr;
 use flo_types::observer::GameInfo;
@@ -124,12 +124,26 @@ where
       game_info
     };
 
-    let _p = MdnsPublisher::start(self.game_version.clone(), lan_game_info).await?;
+    // Create a channel for MDNS events
+    let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<MdnsEvent>(10);
+
+    // Process MDNS events in a separate task
+    tokio::spawn(async move {
+      while let Some(event) = event_rx.recv().await {
+        match event {
+          MdnsEvent::Error(error_msg) => {
+            tracing::error!("Observer MDNS publisher error: {}", error_msg);
+          }
+        }
+      }
+    });
+
+    let _p = MdnsPublisher::start(self.game_version.clone(), lan_game_info, event_tx).await?;
     let slot_info = crate::lan::game::slot::build_player_slot_info(
       SelfPlayer::StreamObserver,
       self.info.random_seed,
       &self.info.slots,
-      self.info.map.twelve_p
+      self.info.map.twelve_p,
     )?;
 
     let mut stream: W3GSStream = loop {

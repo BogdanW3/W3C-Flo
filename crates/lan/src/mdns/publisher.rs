@@ -10,6 +10,16 @@ use tracing_futures::Instrument;
 type GameInfoRef = Arc<RwLock<GameInfo>>;
 type UpdateTx = mpsc::Sender<oneshot::Sender<()>>;
 
+/// Events that can be emitted by the MDNS publisher
+#[derive(Debug, Clone)]
+pub enum MdnsEvent {
+  /// An error occurred in the MDNS publisher worker
+  Error(String),
+}
+
+/// Type alias for the MDNS event sender
+pub type MdnsEventSender = mpsc::Sender<MdnsEvent>;
+
 #[derive(Debug)]
 pub struct MdnsPublisher {
   update_tx: UpdateTx,
@@ -17,15 +27,20 @@ pub struct MdnsPublisher {
 }
 
 impl MdnsPublisher {
-  pub async fn start(game_version: String, game_info: GameInfo) -> Result<Self> {
+  pub async fn start(
+    game_version: String,
+    game_info: GameInfo,
+    event_tx: MdnsEventSender,
+  ) -> Result<Self> {
     let game_name = game_info.name.to_string_lossy().to_string();
     let game_info = Arc::new(RwLock::new(game_info));
     let (update_tx, update_rx) = mpsc::channel::<oneshot::Sender<()>>(1);
 
     tokio::spawn(
       Self::worker(game_version, game_info.clone(), game_name, update_rx)
-        .map_err(|err| {
-          tracing::error!("worker exited with error: {}", err);
+        .map_err(move |err| {
+          tracing::error!("Mdns worker exited with error: {}", err);
+          let _ = event_tx.try_send(MdnsEvent::Error(err.to_string()));
         })
         .instrument(tracing::debug_span!("worker")),
     );

@@ -8,7 +8,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 use tracing_futures::Instrument;
 
-use flo_lan::{GameInfo, MdnsPublisher};
+use flo_lan::{GameInfo, MdnsEvent, MdnsPublisher};
 use flo_util::binary::*;
 use flo_w3gs::game::GameSettings;
 use flo_w3gs::net::W3GSStream;
@@ -45,7 +45,23 @@ async fn main() {
 
   // game_info.data.settings.map_xoro = checksum.xoro;
 
-  let _p = MdnsPublisher::start(game_info.clone()).await.unwrap();
+  // Create a channel for MDNS events
+  let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<MdnsEvent>(10);
+
+  // Process MDNS events in a separate task
+  tokio::spawn(async move {
+    while let Some(event) = event_rx.recv().await {
+      match event {
+        MdnsEvent::Error(error_msg) => {
+          tracing::error!("POC Host MDNS publisher error: {}", error_msg);
+        }
+      }
+    }
+  });
+
+  let _p = MdnsPublisher::start(game_info.clone(), event_tx)
+    .await
+    .unwrap();
   while let Some(stream) = listener.incoming().try_next().await.unwrap() {
     tracing::debug!("connected: {}", stream.local_addr());
 

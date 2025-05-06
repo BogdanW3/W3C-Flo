@@ -12,7 +12,7 @@ use crate::lan::game::slot::LanSlotInfo;
 use crate::lan::get_lan_game_name;
 use crate::node::stream::NodeConnectToken;
 use crate::node::NodeInfo;
-use flo_lan::{GameInfo, MdnsPublisher};
+use flo_lan::{GameInfo, MdnsEvent, MdnsPublisher};
 use flo_state::Addr;
 use flo_task::SpawnScope;
 use flo_types::game::LocalGameInfo;
@@ -21,9 +21,7 @@ use flo_w3gs::protocol::game::GameSettings;
 use flo_w3map::MapChecksum;
 use proxy::LanProxy;
 use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::Notify;
-use tokio::time::sleep;
+use tokio::sync::{mpsc, Notify};
 use tracing_futures::Instrument;
 
 pub struct LanGame {
@@ -100,7 +98,32 @@ impl LanGame {
       {
         let mut scope = scope.handle();
         let mdns_shutdown_notify = mdns_shutdown_notify.clone();
-        let publisher = MdnsPublisher::start(game_version, game_info).await?;
+        let client_clone = client.clone();
+
+        // Create a channel for MDNS events
+        let (event_tx, mut event_rx) = mpsc::channel::<MdnsEvent>(10);
+
+        // Forward MDNS events to the client
+        tokio::spawn(async move {
+          while let Some(event) = event_rx.recv().await {
+            match event {
+              MdnsEvent::Error(error_msg) => {
+                tracing::error!("MDNS error in LanGame create: {}", error_msg);
+                if let Err(err) = client_clone
+                  .send(crate::lan::LanEvent::MdnsError {
+                    game_id,
+                    error: error_msg,
+                  })
+                  .await
+                {
+                  tracing::error!("Failed to send MdnsError in LanGame create: {}", err);
+                }
+              }
+            }
+          }
+        });
+
+        let publisher = MdnsPublisher::start(game_version, game_info, event_tx).await?;
         async move {
           let _publisher = publisher;
           tokio::select! {

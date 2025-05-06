@@ -319,7 +319,7 @@ impl PingCollectActor {
           let _ = rx.borrow_and_update();
         }
         Ok(Err(err)) => {
-          tracing::error!(address = sock_addr_string, error = ?err, "ping now channel dropped");
+          tracing::debug!(address = sock_addr_string, error = ?err, "ping now channel dropped");
           break;
         }
         Err(_) => {

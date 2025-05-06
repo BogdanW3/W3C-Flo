@@ -5,10 +5,10 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Notify;
-use tokio::time::{sleep, delay_until, Instant};
+use tokio::time::{delay_until, sleep, Instant};
 use tracing_futures::Instrument;
 
-use flo_lan::{GameInfo, MdnsPublisher};
+use flo_lan::{GameInfo, MdnsEvent, MdnsPublisher};
 use flo_util::binary::*;
 use flo_w3gs::game::GameSettings;
 use flo_w3gs::net::W3GSStream;
@@ -49,7 +49,25 @@ async fn main() {
       .unwrap();
   let map = Arc::new(map);
 
-  let _p = MdnsPublisher::start(game_info.clone()).await.unwrap();
+  let _p = {
+    // Create a channel for MDNS events
+    let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<MdnsEvent>(10);
+
+    // Process MDNS events in a separate task
+    tokio::spawn(async move {
+      while let Some(event) = event_rx.recv().await {
+        match event {
+          MdnsEvent::Error(error_msg) => {
+            tracing::error!("Replay2 MDNS publisher error: {}", error_msg);
+          }
+        }
+      }
+    });
+
+    MdnsPublisher::start(game_info.clone(), event_tx)
+      .await
+      .unwrap()
+  };
   while let Some(stream) = listener.incoming().try_next().await.unwrap() {
     tracing::debug!("connected: {}", stream.local_addr());
 

@@ -386,6 +386,15 @@ impl Handler<LanEvent> for ControllerClient {
       LanEvent::LanGameDisconnected { game_id } => {
         self.lan.notify(StopLanGame { game_id }).await.ok();
       }
+      LanEvent::MdnsError { game_id, error } => {
+        tracing::error!(game_id, "MDNS error in LanEvent: {}", error);
+        // Send error message to the client
+        self
+          .ws_send(OutgoingMessage::MdnsError(messages::ErrorMessage::new(
+            error,
+          )))
+          .await;
+      }
       LanEvent::NodeStreamEvent { game_id, inner } => match inner {
         NodeStreamEvent::SlotClientStatusUpdate(update) => {
           self

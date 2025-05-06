@@ -1,9 +1,9 @@
 use crate::error::Result;
 use crate::game::local_game_from_game_info;
-//use crate::game::LocalGameInfo;
 use crate::lan::game::{LanGameInfo, LobbyAction, LobbyHandler};
+use crate::messages::ErrorMessage;
 use crate::messages::OutgoingMessage;
-use flo_lan::MdnsPublisher;
+use flo_lan::{MdnsEvent, MdnsPublisher};
 use flo_types::game::{
   GameInfo, GameStatus, Map, PlayerInfo, PlayerSource, Slot, SlotSettings, SlotStatus,
 };
@@ -101,7 +101,26 @@ pub async fn run_test_lobby(
     game_info
   };
 
-  let _p = MdnsPublisher::start(game_version, lan_game_info).await?;
+  let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<MdnsEvent>(10);
+
+  let mdns_outgoing_tx_clone = weak_outgoing_tx.clone();
+  let lobby_handler_tx_clone = weak_outgoing_tx.clone();
+  tokio::spawn(async move {
+    while let Some(event) = event_rx.recv().await {
+      match event {
+        MdnsEvent::Error(error_msg) => {
+          if let Some(tx) = mdns_outgoing_tx_clone.upgrade() {
+            tracing::error!("MDNS error in run_test_lobby: {}", error_msg);
+            tx.send(OutgoingMessage::MdnsError(ErrorMessage::new(error_msg)))
+              .await
+              .ok();
+          }
+        }
+      }
+    }
+  });
+
+  let _p = MdnsPublisher::start(game_version, lan_game_info, event_tx).await?;
 
   while let Some(mut stream) = listener.incoming().try_next().await? {
     return LobbyHandler::new(
@@ -109,7 +128,7 @@ pub async fn run_test_lobby(
       &mut stream,
       None,
       &mut rx,
-      Some(weak_outgoing_tx),
+      Some(lobby_handler_tx_clone),
       None,
     )
     .run()
