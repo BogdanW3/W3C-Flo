@@ -1234,3 +1234,35 @@ impl UsedSlotUpdate {
     }
   }
 }
+
+pub fn cleanup_orphaned_slots(conn: &DbConn, game_ids: &[i32]) -> Result<(usize, usize)> {
+  use game::dsl as g;
+  use game_used_slot::dsl as gus;
+  
+  conn.transaction(|| {
+    // Update game table to mark games as Ended
+    let updated_games = diesel::update(game::table)
+      .filter(g::id.eq_any(game_ids))
+      .filter(g::status.ne_all(&[GameStatus::Ended, GameStatus::Terminated]))
+      .set(g::status.eq(GameStatus::Ended))
+      .execute(conn)?;
+    
+    if updated_games > 0 {
+      tracing::info!("Marked {} orphaned games as Ended", updated_games);
+    }
+    
+    // Update game_used_slot table to mark slots as Left
+    let updated_slots = diesel::update(game_used_slot::table)
+      .filter(gus::game_id.eq_any(game_ids))
+      .filter(gus::player_id.is_not_null())
+      .filter(gus::client_status.ne(SlotClientStatus::Left))
+      .set(gus::client_status.eq(SlotClientStatus::Left))
+      .execute(conn)?;
+    
+    if updated_slots > 0 {
+      tracing::info!("Cleaned up {} orphaned game slots", updated_slots);
+    }
+    
+    Ok((updated_games, updated_slots))
+  })
+}

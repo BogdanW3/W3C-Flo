@@ -12,7 +12,7 @@ pub mod status;
 pub use status::{GameSlotClientStatusUpdate, GameStatusUpdate};
 
 use crate::error::*;
-use crate::game::db::{get_all_active_game_state, get_expired_games};
+use crate::game::db::{get_all_active_game_state, get_expired_games, cleanup_orphaned_slots};
 use crate::game::{GameStatus, SlotClientStatus};
 use crate::node::{NodeRegistry, PlayerToken};
 use crate::player::state::sender::PlayerRegistryHandle;
@@ -108,6 +108,8 @@ impl GameRegistry {
     let ids = self.db.exec(|conn| get_expired_games(conn)).await?;
 
     let mut cancelled = vec![];
+    let mut orphaned_ids = vec![];
+    
     for id in ids {
       if let Some(c) = self.map.get_mut(&id) {
         if let Err(err) = c.send(CancelGame { player_id: None }).await {
@@ -115,6 +117,9 @@ impl GameRegistry {
         } else {
           cancelled.push(id)
         }
+      } else {
+        // Game actor doesn't exist in memory anymore, track for direct cleanup
+        orphaned_ids.push(id);
       }
     }
 
@@ -127,6 +132,21 @@ impl GameRegistry {
           }
         }
       })
+    }
+
+    // Games which no longer exist in memory
+    if !orphaned_ids.is_empty() {
+      tracing::info!("Directly cleaning up orphaned games: {:?}", orphaned_ids);
+      match self.db.exec(move |conn| cleanup_orphaned_slots(conn, &orphaned_ids)).await {
+        Ok((games_count, slots_count)) => {
+          if games_count > 0 || slots_count > 0 {
+            tracing::info!("Successfully cleaned up {} orphaned games and {} orphaned slot records", games_count, slots_count);
+          }
+        },
+        Err(err) => {
+          tracing::error!("Error cleaning up orphaned slots: {}", err);
+        }
+      }
     }
 
     Ok(())
