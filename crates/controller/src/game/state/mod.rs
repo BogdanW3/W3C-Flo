@@ -111,7 +111,7 @@ impl GameRegistry {
     for id in ids {
       if let Some(c) = self.map.get_mut(&id) {
         if let Err(err) = c.send(CancelGame { player_id: None }).await {
-          tracing::error!(game_id = id, "cancel expired game: {}", err);
+          tracing::error!(game_id = id, "Error cancelling expired game: {}", err);
         } else {
           cancelled.push(id)
         }
@@ -123,7 +123,7 @@ impl GameRegistry {
       ctx.spawn(async move {
         for game_id in cancelled {
           if let Err(err) = addr.send(Remove { game_id }).await {
-            tracing::error!(game_id, "remove cancelled game: {}", err);
+            tracing::error!(game_id, "Error removing cancelled game: {}", err);
           }
         }
       })
@@ -176,7 +176,7 @@ impl Handler<RemoveExpiredGames> for GameRegistry {
     _: RemoveExpiredGames,
   ) -> <RemoveExpiredGames as Message>::Result {
     if let Err(err) = self.remove_expired_games(ctx).await {
-      tracing::error!("remove expired games: {}", err);
+      tracing::error!("Failed removing expired games: {}", err);
     }
     let addr = ctx.addr();
     ctx.spawn(async move {

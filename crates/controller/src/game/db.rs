@@ -873,6 +873,12 @@ pub fn get_expired_games(conn: &DbConn) -> Result<Vec<i32>> {
     .limit(LIMIT)
     .load::<i32>(conn)
     .map_err(Into::<crate::error::Error>::into)?;
+  if !game_creation_expired.is_empty() {
+    tracing::warn!(
+      "The following games in preparing or created state have timed out and will be cancelled: {:?}",
+      game_creation_expired
+    );
+  } 
 
   // Get games in Running/Paused status that haven't finished after 6 hours (aligned with matchmaking config)
   // https://github.com/w3champions/matchmaking-service/blob/91cde490d7cf2782647cbb8e1a48a9e1dfb37559/src/app/managers/matches.manager.ts#L263
@@ -884,6 +890,12 @@ pub fn get_expired_games(conn: &DbConn) -> Result<Vec<i32>> {
     .limit(LIMIT)
     .load::<i32>(conn)
     .map_err(Into::<crate::error::Error>::into)?;
+  if !game_play_expired.is_empty() {
+    tracing::warn!(
+      "The following running or paused games have expired and will be cancelled: {:?}",
+      game_play_expired
+    );
+  } 
 
   // Get gameids of slots that haven't been closed after 7 hours (we want to give the actual game cancellation a chance before we cancel via this route)
   // When this actually returns data, that means that the game cancellation method leaked cancelling slots

@@ -160,7 +160,7 @@ impl GlobalState {
     let client_status = packet.status();
 
     if client_status != SlotClientStatus::Left {
-      tracing::error!(
+      tracing::error!(game_id, player_id,
         "controller can only change client status to Left, got {:?}",
         client_status
       );
@@ -177,6 +177,7 @@ impl GlobalState {
     let game = match self.games.get(game_id) {
       Some(game) => game,
       None => {
+        tracing::error!(game_id, player_id, "Rejecting client update slot status to {:?} as the game wasn't found", client_status);
         return Ok(
           PacketControllerUpdateSlotStatusReject {
             player_id,
@@ -196,25 +197,31 @@ impl GlobalState {
       )
       .await
     {
-      Ok(_) => Ok(
-        PacketControllerUpdateSlotStatusAccept {
-          player_id,
-          game_id,
-          status: client_status.into(),
-        }
-        .encode_as_frame()?,
-      ),
-      Err(err) => match err {
-        Error::InvalidClientStatusTransition(_, _) => Ok(
-          PacketControllerUpdateSlotStatusReject {
+      Ok(_) => {
+        tracing::info!(game_id, player_id, "Player slot has been successfully updated to {:?}", client_status);
+        Ok(
+          PacketControllerUpdateSlotStatusAccept {
             player_id,
             game_id,
-            reason: UpdateSlotClientStatusRejectReason::InvalidStatus.into(),
+            status: client_status.into(),
           }
           .encode_as_frame()?,
-        ),
+        )
+      },
+      Err(err) => match err {
+        Error::InvalidClientStatusTransition(_, _) => {
+          tracing::error!(game_id, player_id, "Declining player slot update to {:?} as it is invalid: {}", client_status, err);
+          Ok(
+            PacketControllerUpdateSlotStatusReject {
+              player_id,
+              game_id,
+              reason: UpdateSlotClientStatusRejectReason::InvalidStatus.into(),
+            }
+            .encode_as_frame()?,
+          )
+        },
         err => {
-          tracing::error!(game_id, player_id, "update client status: {}", err);
+          tracing::error!(game_id, player_id, "Error updating client status to {:?}: {}", client_status, err);
           Ok(
             PacketControllerUpdateSlotStatusReject {
               player_id,

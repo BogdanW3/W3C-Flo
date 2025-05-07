@@ -26,7 +26,7 @@ impl Handler<CancelGame> for GameActor {
     CancelGame { player_id }: CancelGame,
   ) -> Result<()> {
     let game_id = self.game_id;
-
+    tracing::info!(game_id, "Cancelling game");
     let active_players = self
       .db
       .exec(move |conn| {
@@ -52,6 +52,7 @@ impl Handler<CancelGame> for GameActor {
     // After the game has been cancelled, notify nodes about players who left
     for player_id in &active_players {
       let node_id = self.selected_node_id.clone().unwrap();
+      tracing::info!(game_id, node_id, player_id, "Broadcasting player having left node due to game canellation of game");
 
       // Notify node about player leave
       if let Err(err) = self

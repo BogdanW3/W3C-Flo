@@ -35,6 +35,15 @@ impl GameRegistry {
       node_id,
     }: Register,
   ) {
+    tracing::info!(
+      game_id = id,
+      host_player,
+      status = ?status,
+      player_count = players.len(),
+      node_id = ?node_id,
+      "Registering new game"
+    );
+
     for player in &players {
       self.add_game_player(id, *player);
     }
@@ -87,7 +96,7 @@ impl Handler<Remove> for GameRegistry {
                 .await
                 .ok();
             }
-            tracing::debug!(game_id = id, "game shutdown completed");
+            tracing::info!(game_id = id, "game shutdown completed");
           }
           Ok(Err(err)) => {
             tracing::warn!(game_id = id, "Remove: fetch state: {}", err);
@@ -211,6 +220,7 @@ impl Handler<ResolveGamePlayerPingBroadcastTargets> for GameRegistry {
 
 impl GameRegistry {
   fn add_game_player(&mut self, game_id: i32, player_id: i32) {
+    tracing::info!(game_id, player_id, "Adding player to game");
     self
       .player_games_map
       .entry(player_id)
@@ -224,21 +234,28 @@ impl GameRegistry {
   }
 
   fn remove_game_player(&mut self, game_id: i32, player_id: i32) {
+    tracing::info!(game_id, player_id, "Removing player from game");
     match self.player_games_map.entry(player_id) {
-      Entry::Vacant(_entry) => {}
+      Entry::Vacant(_entry) => {
+        tracing::warn!(player_id, "Player not found in player_games_map when removing");
+      }
       Entry::Occupied(mut entry) => {
         entry.get_mut().retain(|v| *v != game_id);
         if entry.get().is_empty() {
+          tracing::info!(player_id, "Player removed from all games, removing player_games_map entry");
           entry.remove();
         }
       }
     }
 
     match self.game_players_map.entry(game_id) {
-      Entry::Vacant(_entry) => {}
+      Entry::Vacant(_entry) => {
+        tracing::warn!(game_id, "Game not found in game_players_map when removing player");
+      }
       Entry::Occupied(mut entry) => {
         entry.get_mut().retain(|v| *v != player_id);
         if entry.get().is_empty() {
+          tracing::info!(game_id, "All players removed from game, removing game_players_map entry");
           entry.remove();
         }
       }

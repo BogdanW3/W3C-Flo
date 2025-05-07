@@ -32,7 +32,7 @@ pub async fn handle_global_events(
   while let Some(event) = event_receiver.recv().await {
     match event {
       GlobalEvent::GameEnded(game_id) => {
-        tracing::debug!(game_id, "game ended: {}", game_id);
+        tracing::info!(game_id, "game ended: {}", game_id);
         ctx.state.end_game(game_id);
       }
     }
