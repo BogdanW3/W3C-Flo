@@ -4,7 +4,7 @@ use diesel::prelude::*;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::db::DbConn;
 use crate::error::*;
@@ -156,8 +156,9 @@ pub fn cancel(conn: &DbConn, game_id: i32, created_by: Option<i32>) -> Result<()
     .first(conn)
     .optional()?
     .ok_or_else(|| Error::GameNotFound)?;
-  if status != GameStatus::Preparing && status != GameStatus::Created {
-    return Err(Error::GameNotCancellable);
+  if status == GameStatus::Ended || status == GameStatus::Terminated {
+    // Game is already ended or terminated, do nothing
+    return Ok(());
   }
   diesel::update(game::table.find(game_id))
     .set(game::status.eq(GameStatus::Ended))
@@ -862,13 +863,53 @@ pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> 
 }
 
 pub fn get_expired_games(conn: &DbConn) -> Result<Vec<i32>> {
-  let t = Utc::now() - chrono::Duration::minutes(30);
-  game::table
+  const LIMIT: i64 = 1000;
+  // Get games in Preparing/Created status that haven't been updated in 30 minutes
+  let game_creation_timeout = Utc::now() - chrono::Duration::minutes(30);
+  let game_creation_expired = game::table
     .select(game::id)
     .filter(game::status.eq_any(&[GameStatus::Preparing, GameStatus::Created]))
-    .filter(game::updated_at.lt(t))
-    .load(conn)
-    .map_err(Into::into)
+    .filter(game::updated_at.lt(game_creation_timeout))
+    .limit(LIMIT)
+    .load::<i32>(conn)
+    .map_err(Into::<crate::error::Error>::into)?;
+
+  // Get games in Running/Paused status that haven't finished after 6 hours (aligned with matchmaking config)
+  // https://github.com/w3champions/matchmaking-service/blob/91cde490d7cf2782647cbb8e1a48a9e1dfb37559/src/app/managers/matches.manager.ts#L263
+  let game_play_timeout = Utc::now() - chrono::Duration::hours(6);
+  let game_play_expired = game::table
+    .select(game::id)
+    .filter(game::status.eq_any(&[GameStatus::Running, GameStatus::Paused]))
+    .filter(game::updated_at.lt(game_play_timeout))
+    .limit(LIMIT)
+    .load::<i32>(conn)
+    .map_err(Into::<crate::error::Error>::into)?;
+
+  // Get gameids of slots that haven't been closed after 7 hours (we want to give the actual game cancellation a chance before we cancel via this route)
+  // When this actually returns data, that means that the game cancellation method leaked cancelling slots
+  let game_slot_timeout = Utc::now() - chrono::Duration::hours(7);
+  let game_slot_expired = game_used_slot::table
+    .select(game_used_slot::game_id)
+    .filter(game_used_slot::player_id.is_not_null())
+    .filter(game_used_slot::client_status.ne(SlotClientStatus::Left))
+    .filter(game_used_slot::updated_at.lt(game_slot_timeout))
+    .limit(LIMIT)
+    .load::<i32>(conn)
+    .map_err(Into::<crate::error::Error>::into)?;
+  if !game_slot_expired.is_empty() {
+    tracing::warn!(
+      "Game cancellation method leaked cancelling slots: {:?}",
+      game_slot_expired
+    );
+  }
+
+  // Combine results
+  let mut result = HashSet::new();
+  result.extend(game_creation_expired);
+  result.extend(game_play_expired);
+  result.extend(game_slot_expired);
+
+  Ok(result.into_iter().collect())
 }
 
 pub fn select_node(conn: &DbConn, id: i32, player_id: i32, node_id: Option<i32>) -> Result<()> {

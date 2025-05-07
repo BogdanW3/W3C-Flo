@@ -6,7 +6,8 @@ COPY . .
 
 RUN rustup component add rustfmt
 
-RUN cargo build -p flo-node-service --release
+ARG BUILD_MODE=release
+RUN cargo build -p flo-node-service $(if [ "$BUILD_MODE" = "debug" ]; then echo ""; else echo "--release"; fi)
 
 FROM debian:bullseye-slim
 
@@ -24,6 +25,7 @@ EXPOSE 3553/tcp
 EXPOSE 3554/tcp
 EXPOSE 3555/tcp
 
-COPY --from=builder /usr/local/build/target/release/flo-node-service /usr/local/flo/flo-node-service
+ARG BUILD_MODE=release
+COPY --from=builder /usr/local/build/target/${BUILD_MODE}/flo-node-service /usr/local/flo/flo-node-service
 
 CMD ["/usr/local/flo/flo-node-service"]

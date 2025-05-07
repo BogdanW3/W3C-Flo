@@ -175,7 +175,7 @@ impl GameStatus {
   }
 
   pub fn active_variants() -> &'static [GameStatus] {
-    &[Self::Preparing, Self::Created, Self::Running]
+    &[Self::Preparing, Self::Created, Self::Running, Self::Paused]
   }
 }
 

@@ -1,5 +1,8 @@
 use crate::error::*;
 use crate::game::state::GameActor;
+use crate::node::messages as node_messages;
+use crate::state::ActorMapExt;
+use diesel::prelude::*;
 
 use crate::player::state::sender::PlayerFrames;
 
@@ -24,18 +27,62 @@ impl Handler<CancelGame> for GameActor {
   ) -> Result<()> {
     let game_id = self.game_id;
 
-    self
+    let active_players = self
       .db
-      .exec(move |conn| crate::game::db::cancel(conn, game_id, player_id))
+      .exec(move |conn| {
+        conn.transaction(|| -> Result<Vec<i32>> {
+          // Cancel the game first
+          crate::game::db::cancel(conn, game_id, player_id)?;
+
+          // Get active players who haven't left yet
+          let active_players = crate::game::db::get_node_active_player_ids(conn, game_id)?;
+
+          // Then handle player leave for each active player so that they dont remain in the slot table
+          for active_player_id in &active_players {
+            crate::game::db::leave_node(conn, game_id, *active_player_id)?;
+          }
+
+          // Return players who were still active when the game was cancelled
+          Ok(active_players)
+        })
+      })
       .await
       .map_err(Error::from)?;
 
+    // After the game has been cancelled, notify nodes about players who left
+    for player_id in &active_players {
+      let node_id = self.selected_node_id.clone().unwrap();
+
+      // Notify node about player leave
+      if let Err(err) = self
+        .nodes
+        .send_to(
+          node_id,
+          node_messages::NodePlayerLeave {
+            game_id,
+            player_id: *player_id,
+          },
+        )
+        .await
+      {
+        tracing::error!(
+          game_id,
+          node_id,
+          player_id,
+          "force leave node error during game cancellation: {:?}",
+          err
+        );
+      }
+    }
+
+    // Notify player registry about players having left
     self
       .player_reg
       .players_leave_game(self.players.clone(), game_id)
       .await?;
 
-    let packet_iter = self
+    // Notify clients
+    let packet_iter: std::vec::IntoIter<(i32, PlayerFrames)> = self
       .players
       .iter()
       .cloned()

@@ -14,12 +14,20 @@ services:
 
   node:
     container_name: flo-node
-    network_mode: host
     build:
       context: .
       dockerfile: build/node.Dockerfile
+      args:
+        BUILD_MODE: debug
+    volumes:
+      - ./.env:/usr/local/s2/.env
     depends_on:
       - postgres
+    ports:
+      - '127.0.0.1:3552:3552/udp'
+      - '127.0.0.1:3553:3553'
+      - '127.0.0.1:3554:3554/tcp'
+      - '127.0.0.1:3555:3555'
     env_file:
       - .env
 
@@ -28,10 +36,16 @@ services:
     build:
       context: .
       dockerfile: build/controller.Dockerfile
-    network_mode: host
+      args:
+        BUILD_MODE: debug
+    volumes:
+      - ./.env:/usr/local/s2/.env
     depends_on:
       - postgres
       - node
+    ports:
+     - '127.0.0.1:3549:3549'
+     - '127.0.0.1:3550:3550'
     env_file:
       - .env
 

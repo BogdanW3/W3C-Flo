@@ -105,7 +105,7 @@ async fn leave_game_abort(
   player_id: i32,
   node_id: i32,
 ) -> Result<PlayerLeaveResult> {
-  let active_player_ids = state
+  let active_player_ids: Vec<i32> = state
     .db
     .exec(move |conn| {
       conn.transaction(|| {

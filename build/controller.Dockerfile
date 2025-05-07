@@ -6,7 +6,8 @@ COPY . .
 
 RUN rustup component add rustfmt
 
-RUN cargo build -p flo-controller-service --release
+ARG BUILD_MODE=release
+RUN cargo build -p flo-controller-service $(if [ "$BUILD_MODE" = "debug" ]; then echo ""; else echo "--release"; fi)
 
 FROM debian:bullseye-slim
 
@@ -22,6 +23,7 @@ ENV RUST_BACKTRACE 1
 EXPOSE 3549/tcp
 EXPOSE 3550/tcp
 
-COPY --from=builder /usr/local/build/target/release/flo-controller-service /usr/local/flo/flo-controller-service
+ARG BUILD_MODE=release
+COPY --from=builder /usr/local/build/target/${BUILD_MODE}/flo-controller-service /usr/local/flo/flo-controller-service
 
 CMD ["/usr/local/flo/flo-controller-service"]

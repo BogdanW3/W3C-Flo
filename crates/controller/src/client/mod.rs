@@ -9,6 +9,9 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::error::*;
+use crate::game::messages::CancelGame;
+use crate::game::Game;
+use crate::node::PlayerToken;
 use crate::state::{ActorMapExt, ControllerStateRef};
 
 mod handshake;
@@ -201,15 +204,87 @@ async fn send_initial_state(
     })
     .await?;
 
-  let game_id = active_slots.last().map(|s| s.game_id);
+  let mut game_id = active_slots.last().map(|s| s.game_id);
+  let mut game: Option<Game> = None;
+  let mut node_player_token: Option<PlayerToken> = None;
 
-  state
-    .players
-    .notify(Connect {
-      game_id: game_id.clone(),
-      sender,
-    })
-    .await?;
+  if let Some(current_game_id) = game_id {
+    // Fetch game details and node list concurrently
+    let db_result_future = state
+      .db
+      .exec(move |conn| crate::game::db::get_full_and_node_token(conn, current_game_id, player_id));
+    let node_list_future = state.nodes.send(ListNode);
+    let (db_result, node_list_result) = tokio::join!(db_result_future, node_list_future);
+
+    // Handle game state based on database result and node availability
+    match db_result {
+      Ok((fetched_game, token)) => {
+        // Check if node exists and is available
+        let node_is_available = fetched_game.node.as_ref().map_or(false, |node| {
+          node_list_result.as_ref().map_or(false, |nodes| {
+            nodes
+              .iter()
+              .find(|n| n.id == node.id)
+              .map_or(false, |n| !n.disabled)
+          })
+        });
+
+        if node_is_available {
+          // Valid game state found
+          game = Some(fetched_game);
+          node_player_token = token;
+          // game_id remains Some(current_game_id)
+        } else {
+          // Valid game, but node missing or unavailable
+          if fetched_game.node.is_none() {
+            tracing::warn!(
+              "Canceling game {} for player {}: Game has no node assigned.",
+              current_game_id,
+              player_id
+            );
+          } else if node_list_result.is_err() {
+            tracing::warn!(
+              "Canceling game {} for player {}: Failed to fetch node list ({:?}).",
+              current_game_id,
+              player_id,
+              node_list_result.err()
+            );
+          } else {
+            tracing::warn!(
+              "Canceling game {} for player {}: Node {} is unavailable or disabled.",
+              current_game_id,
+              player_id,
+              fetched_game.node.as_ref().map(|n| n.id).unwrap_or(-1)
+            );
+          }
+
+          // Cancel game
+          let _ = state
+            .games
+            .send_to(current_game_id, CancelGame { player_id: None })
+            .await;
+          game_id = None;
+        }
+      }
+      Err(e) => {
+        // Database fetch error
+        tracing::warn!(
+          "Canceling game {} for player {}: Failed to fetch game details ({}).",
+          current_game_id,
+          player_id,
+          e
+        );
+        // Cancel game
+        let _ = state
+          .games
+          .send_to(current_game_id, CancelGame { player_id: None })
+          .await;
+        game_id = None;
+      }
+    }
+  }
+
+  state.players.notify(Connect { game_id, sender }).await?;
 
   let frame_accept = connect::PacketClientConnectAccept {
     lobby_version: Some(From::from(crate::version::FLO_LOBBY_VERSION)),
@@ -222,7 +297,7 @@ async fn send_initial_state(
         } else {
           PlayerStatus::Idle.into()
         },
-        game_id: game_id.clone(),
+        game_id,
       }
     }),
     nodes: state.nodes.send(ListNode).await?.pack()?,
@@ -231,13 +306,8 @@ async fn send_initial_state(
 
   let mut frames = vec![frame_accept];
 
-  if let Some(game_id) = game_id {
-    let (mut game, node_player_token) = state
-      .db
-      .exec(move |conn| crate::game::db::get_full_and_node_token(conn, game_id, player_id))
-      .await?;
-
-    let node_id = game.node.as_ref().map(|node| node.id);
+  if let Some(mut game) = game {
+    let current_game_id = game_id.expect("Inconsistent state: game is Some but game_id is None");
 
     if game.mask_player_names {
       let is_ob = game
@@ -256,20 +326,26 @@ async fn send_initial_state(
       }
     }
 
-    let game = game.pack()?;
+    let game_node_id = game.node.as_ref().map(|n| n.id);
 
-    let frame = connect::PacketGameInfo { game: Some(game) }.encode_as_frame()?;
-    frames.push(frame);
-
-    if let Some(player_token) = node_player_token {
-      let frame = connect::PacketGamePlayerToken {
-        node_id: node_id.ok_or_else(|| Error::GameNodeNotSelected)?,
-        game_id,
-        player_id,
-        player_token: player_token.to_vec(),
+    let packed_game = game.pack()?;
+    frames.push(
+      connect::PacketGameInfo {
+        game: Some(packed_game),
       }
-      .encode_as_frame()?;
-      frames.push(frame);
+      .encode_as_frame()?,
+    );
+
+    if let (Some(token), Some(node_id)) = (node_player_token, game_node_id) {
+      frames.push(
+        connect::PacketGamePlayerToken {
+          node_id,
+          game_id: current_game_id,
+          player_id,
+          player_token: token.to_vec(),
+        }
+        .encode_as_frame()?,
+      );
     }
   }
 

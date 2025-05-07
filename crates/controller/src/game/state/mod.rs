@@ -29,7 +29,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::sleep;
 
-const GAME_INACTIVE_CHECK_INTERVAL: Duration = Duration::from_secs(3600 * 30);
+const GAME_INACTIVE_CHECK_INTERVAL: Duration = Duration::from_secs(60 * 5);
 
 pub struct GameRegistry {
   db: ExecutorRef,

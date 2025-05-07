@@ -38,8 +38,6 @@ pub enum Error {
   PlayerNotFound,
   #[error("Game not found")]
   GameNotFound,
-  #[error("Only games with `Preparing` or `Created` status are cancellable")]
-  GameNotCancellable,
   #[error("Invalid game data, please re-create")]
   GameDataInvalid,
   #[error("The game you are trying to join is full")]
@@ -125,7 +123,6 @@ impl From<Error> for Status {
       | e @ Error::PlayerNotFound
       | e @ Error::MapHasNoPlayer
       | e @ Error::GameFull
-      | e @ Error::GameNotCancellable
       | e @ Error::JoinTokenExpired => Status::invalid_argument(e.to_string()),
       e @ Error::PlayerTokenExpired => Status::unauthenticated(e.to_string()),
       Error::JsonWebToken(e) => Status::unauthenticated(e.to_string()),
