@@ -43,7 +43,11 @@ pub fn validate_join_token(token: &str) -> Result<JoinToken> {
 
 #[test]
 fn test_join_token() {
-  dotenv::dotenv().unwrap();
+  // This JWT_SECRET is not an actual secret used anywhere. But we need to set one to create a player token.
+  std::env::set_var(
+    "JWT_SECRET_BASE64",
+    "dd7bb476554a8f3980ff95dd1c6da1665fd8b77f42e71b558402f5a3aecec98e",
+  );
   let token = create_join_token(100).unwrap();
   let token = validate_join_token(&token).unwrap();
   dbg!(token);

@@ -115,6 +115,7 @@ pub struct PlayerBan {
   pub ban_type: PlayerBanType,
   pub ban_expires_at: Option<DateTime<Utc>>,
   pub created_at: DateTime<Utc>,
+  pub author: Option<String>,
 }
 
 pub(crate) type PlayerBanColumns = (
@@ -123,6 +124,7 @@ pub(crate) type PlayerBanColumns = (
   player_ban::ban_type,
   player_ban::ban_expires_at,
   player_ban::created_at,
+  player_ban::author,
 );
 
 impl PlayerBan {
@@ -132,5 +134,6 @@ impl PlayerBan {
     player_ban::ban_type,
     player_ban::ban_expires_at,
     player_ban::created_at,
+    player_ban::author,
   );
 }

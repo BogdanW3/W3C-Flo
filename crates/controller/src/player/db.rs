@@ -4,6 +4,7 @@ use crate::player::{Player, PlayerBan, PlayerBanType, PlayerRef, PlayerSource, S
 use crate::schema::{player, player_ban, player_mute};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
+use diesel::result::{DatabaseErrorKind, Error as DieselError};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
 
@@ -173,7 +174,7 @@ pub fn list_ban(
     .inner_join(player::table)
     .select(PlayerBan::COLUMNS)
     .filter(player::api_client_id.eq(api_client_id))
-    .order(player_ban::id)
+    .order(player_ban::id.desc())
     .limit(PAGE_SIZE + 1)
     .into_boxed();
 
@@ -182,7 +183,7 @@ pub fn list_ban(
   }
 
   if let Some(id) = next_id {
-    q = q.filter(player_ban::id.ge(id));
+    q = q.filter(player_ban::id.lt(id));
   }
 
   let mut rows = q.load::<PlayerBan>(conn)?;
@@ -214,6 +215,7 @@ pub fn create_ban(
   player_id: i32,
   ban_type: PlayerBanType,
   ban_expires_at: Option<DateTime<Utc>>,
+  author: String,
 ) -> Result<()> {
   #[derive(Insertable)]
   #[table_name = "player_ban"]
@@ -221,20 +223,25 @@ pub fn create_ban(
     player_id: i32,
     ban_type: PlayerBanType,
     ban_expires_at: Option<DateTime<Utc>>,
+    author: String,
   }
 
-  diesel::insert_into(player_ban::table)
+  let res = diesel::insert_into(player_ban::table)
     .values(&Insert {
       player_id,
       ban_type,
       ban_expires_at,
+      author,
     })
-    .on_conflict((player_ban::player_id, player_ban::ban_type))
-    .do_update()
-    .set(player_ban::ban_expires_at.eq(ban_expires_at))
-    .execute(conn)?;
+    .execute(conn);
 
-  Ok(())
+  match res {
+    Ok(_) => Ok(()),
+    Err(DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _)) => {
+      Err(Error::BanAlreadyExists)
+    }
+    Err(e) => Err(e.into()),
+  }
 }
 
 pub fn remove_ban_by_type(conn: &DbConn, player_id: i32, ban_type: PlayerBanType) -> Result<()> {

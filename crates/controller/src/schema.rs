@@ -99,6 +99,7 @@ diesel::table! {
         ban_type -> Int4,
         ban_expires_at -> Nullable<Timestamptz>,
         created_at -> Timestamptz,
+        author -> Nullable<Text>,
     }
 }
 

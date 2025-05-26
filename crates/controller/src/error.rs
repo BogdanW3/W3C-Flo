@@ -84,6 +84,8 @@ pub enum Error {
   PlayerTeamInvalid,
   #[error("Player not belongs to the current API client")]
   PlayerOwnerCheckFailed,
+  #[error("Ban already exists")]
+  BanAlreadyExists,
   #[error("Operation timeout: {0}")]
   Timeout(anyhow::Error),
   #[error("net: {0}")]

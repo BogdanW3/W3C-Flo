@@ -585,6 +585,8 @@ impl FloController for FloControllerService {
       .map(|t| DateTime::<Utc>::unpack(t))
       .transpose()
       .map_err(Status::internal)?;
+    // Because of backwards compatibility in gRPC, we had to mark the field as optional, hence enforce it here
+    let author = params.clone().author.filter(|a| !a.trim().is_empty()).ok_or_else(|| Status::invalid_argument("Author is required"))?;
     self
       .state
       .db
@@ -595,6 +597,7 @@ impl FloController for FloControllerService {
           params.player_id,
           PlayerBanType::unpack_enum(params.ban_type()),
           ban_expires_at,
+          author,
         )
       })
       .await

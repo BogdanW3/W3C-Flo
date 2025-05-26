@@ -34,6 +34,12 @@ const PING_INTERVAL: Duration = Duration::from_secs(30);
 const PING_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub async fn serve(state: ControllerStateRef) -> Result<()> {
+  #[cfg(not(debug_assertions))]
+  tracing::info!("Running in release mode");
+
+  #[cfg(debug_assertions)]
+  tracing::info!("Running in debug mode");
+
   state
     .db
     .exec(|conn| crate::game::db::reset_instance_state(conn))
