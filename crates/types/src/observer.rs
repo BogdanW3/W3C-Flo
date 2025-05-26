@@ -1,6 +1,6 @@
+use crate::game::LocalGameInfo;
 pub use crate::game::{Computer, Race, SlotSettings, SlotStatus};
 use crate::game::{LanGamePlayerInfo, LanGameSlot};
-use crate::game::LocalGameInfo;
 //use flo_client::game::LocalGameInfo;
 //use crate::game::LocalGameInfo;
 use flo_grpc::game::Game;
@@ -23,11 +23,21 @@ impl From<(&LocalGameInfo, String)> for GameInfo {
     Self {
       id: lan_game.0.game_id,
       name: lan_game.0.name.clone(),
-      map: Map { sha1: lan_game.0.map_sha1.to_vec(), checksum: lan_game.0.map_checksum, path: lan_game.0.map_path.clone(), twelve_p: lan_game.0.map_twelve_p },
-      slots: lan_game.0.slots.iter().map(|lan_slot| { crate::observer::Slot::from(lan_slot.clone()) }).collect::<Vec<_>>(),
+      map: Map {
+        sha1: lan_game.0.map_sha1.to_vec(),
+        checksum: lan_game.0.map_checksum,
+        path: lan_game.0.map_path.clone(),
+        twelve_p: lan_game.0.map_twelve_p,
+      },
+      slots: lan_game
+        .0
+        .slots
+        .iter()
+        .map(|lan_slot| crate::observer::Slot::from(lan_slot.clone()))
+        .collect::<Vec<_>>(),
       random_seed: lan_game.0.random_seed,
       game_version: lan_game.1,
-      start_time_millis: 0 //Trying this out, let's see if it works
+      start_time_millis: 0, //Trying this out, let's see if it works
     }
   }
 }
@@ -50,12 +60,12 @@ impl S2ProtoUnpack<Game> for GameInfo {
 }
 
 #[derive(Debug, S2ProtoUnpack, Serialize)]
-#[s2_grpc(message_type(flo_net::proto::flo_observer::Map, flo_grpc::game::Map))]
+#[s2_grpc(message_type(flo_net::proto::flo_observer::Map, flo_grpc::game::Wc3Map))]
 pub struct Map {
   pub sha1: Vec<u8>,
   pub checksum: u32,
   pub path: String,
-  pub twelve_p: bool
+  pub twelve_p: bool,
 }
 
 impl Map {
@@ -108,8 +118,11 @@ impl<'a> From<&'a Slot> for LanGameSlot<'a> {
 impl From<crate::game::Slot> for Slot {
   fn from(slot: crate::game::Slot) -> Self {
     Self {
-      player: slot.player.as_ref().map(|p | PlayerInfo { id: p.id, name: p.name.clone() }),
-      settings: slot.settings
+      player: slot.player.as_ref().map(|p| PlayerInfo {
+        id: p.id,
+        name: p.name.clone(),
+      }),
+      settings: slot.settings,
     }
   }
 }

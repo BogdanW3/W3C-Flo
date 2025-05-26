@@ -14,7 +14,7 @@ use crate::game::{
   Computer, CreateGameSlot, Game, GameEntry, GameStatus, Race, Slot, SlotClientStatus,
   SlotSettings, SlotStatus, Slots,
 };
-use crate::map::Map;
+use crate::map::Wc3Map;
 use crate::node::{NodeRef, NodeRefColumns, PlayerToken};
 use crate::player::{PlayerRef, PlayerRefColumns};
 use crate::schema::{game, game_used_slot, node, player};
@@ -171,7 +171,7 @@ pub fn cancel(conn: &DbConn, game_id: i32, created_by: Option<i32>) -> Result<()
 pub struct CreateGameParams {
   pub player_id: i32,
   pub name: String,
-  pub map: Map,
+  pub map: Wc3Map,
   pub is_private: bool,
   pub is_live: bool,
 }
@@ -228,7 +228,7 @@ pub fn create(conn: &DbConn, params: CreateGameParams) -> Result<Game> {
 #[s2_grpc(message_type = "flo_grpc::controller::CreateGameAsBotRequest")]
 pub struct CreateGameAsBotParams {
   pub name: String,
-  pub map: Map,
+  pub map: Wc3Map,
   pub is_private: bool,
   pub is_live: bool,
   pub node_id: i32,
@@ -1043,7 +1043,7 @@ pub fn get_node_active_game_ids(conn: &DbConn, node_id: i32) -> Result<Vec<i32>>
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Meta {
-  pub map: Map,
+  pub map: Wc3Map,
   pub created_by: Option<PlayerRef>,
 }
 

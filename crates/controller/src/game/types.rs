@@ -1,4 +1,4 @@
-use crate::map::Map;
+use crate::map::Wc3Map;
 use crate::node::{NodeRef, NodeRefColumns};
 use crate::player::{PlayerRef, PlayerRefColumns};
 use crate::schema::{game, game_used_slot};
@@ -15,7 +15,7 @@ pub struct Game {
   pub name: String,
   #[s2_grpc(proto_enum)]
   pub status: GameStatus,
-  pub map: Map,
+  pub map: Wc3Map,
   pub slots: Vec<Slot>,
   pub node: Option<NodeRef>,
   pub is_private: bool,

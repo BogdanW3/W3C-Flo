@@ -408,10 +408,10 @@ pub async fn create_rpg_game(players: Vec<i32>, ob: Option<i32>) -> Result<i32> 
   Ok(res.into_inner().game.unwrap().id)
 }
 
-fn get_map() -> Result<Map> {
+fn get_map() -> Result<Wc3Map> {
   let storage = flo_w3storage::W3Storage::from_env()?;
   let (map, checksum) = flo_w3map::W3Map::open_storage_with_checksum(&storage, MAP)?;
-  let map = Map {
+  let map = Wc3Map {
     sha1: checksum.sha1.to_vec(),
     checksum: checksum.xoro,
     name: "FLO_CLI".to_string(),
@@ -444,12 +444,12 @@ fn get_map() -> Result<Map> {
   Ok(map)
 }
 
-fn get_rpg_map() -> Result<Map> {
+fn get_rpg_map() -> Result<Wc3Map> {
   let path = "maps/SurvivalChaos4.0p.w3x";
   let storage = flo_w3storage::W3Storage::from_env()?;
   let (map, checksum) = flo_w3map::W3Map::open_storage_with_checksum(&storage, path)?;
   dbg!(&map);
-  let map = Map {
+  let map = Wc3Map {
     sha1: checksum.sha1.to_vec(),
     checksum: checksum.xoro,
     name: "FLO_CLI".to_string(),

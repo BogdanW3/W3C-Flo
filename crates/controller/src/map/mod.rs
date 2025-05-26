@@ -5,8 +5,8 @@ use s2_grpc_utils::{S2ProtoPack, S2ProtoUnpack};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, S2ProtoPack, S2ProtoUnpack, Clone)]
-#[s2_grpc(message_type = "flo_grpc::game::Map")]
-pub struct Map {
+#[s2_grpc(message_type = "flo_grpc::game::Wc3Map")]
+pub struct Wc3Map {
   pub sha1: MapSha1,
   pub checksum: u32,
   pub name: String,

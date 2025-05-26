@@ -499,7 +499,7 @@ pub struct Game {
 }
 
 #[derive(Debug, S2ProtoUnpack, SimpleObject)]
-#[s2_grpc(message_type = "flo_grpc::game::Map")]
+#[s2_grpc(message_type = "flo_grpc::game::Wc3Map")]
 pub struct Map {
   pub sha1: Vec<u8>,
   pub checksum: u32,
