@@ -40,7 +40,7 @@ pub async fn serve(state: ControllerStateRef) -> Result<()> {
     .await?;
 
   let mut listener = FloListener::bind_v4(flo_constants::CONTROLLER_SOCKET_PORT).await?;
-  tracing::info!("listening on port {}", listener.port());
+  tracing::info!("Socket serving on port {}", listener.port());
 
   while let Some(res) = listener.incoming().try_next().await.transpose() {
     let mut stream = match res {

@@ -813,11 +813,7 @@ pub fn get_all_active_game_state(conn: &DbConn) -> Result<Vec<GameStateFromDb>> 
 
   let rows: Vec<(i32, GameStatus, Option<i32>, i32)> = game::table
     .left_outer_join(node::table)
-    .filter(dsl::status.eq_any(&[
-      GameStatus::Preparing,
-      GameStatus::Created,
-      GameStatus::Running,
-    ]))
+    .filter(dsl::status.eq_any(GameStatus::active_variants()))
     .order(dsl::created_at)
     .select((dsl::id, dsl::status, dsl::node_id, dsl::created_by))
     .load(conn)?;
@@ -878,7 +874,7 @@ pub fn get_expired_games(conn: &DbConn) -> Result<Vec<i32>> {
       "The following games in preparing or created state have timed out and will be cancelled: {:?}",
       game_creation_expired
     );
-  } 
+  }
 
   // Get games in Running/Paused status that haven't finished after 6 hours (aligned with matchmaking config)
   // https://github.com/w3champions/matchmaking-service/blob/91cde490d7cf2782647cbb8e1a48a9e1dfb37559/src/app/managers/matches.manager.ts#L263
@@ -895,7 +891,7 @@ pub fn get_expired_games(conn: &DbConn) -> Result<Vec<i32>> {
       "The following running or paused games have expired and will be cancelled: {:?}",
       game_play_expired
     );
-  } 
+  }
 
   // Get gameids of slots that haven't been closed after 7 hours (we want to give the actual game cancellation a chance before we cancel via this route)
   // When this actually returns data, that means that the game cancellation method leaked cancelling slots
@@ -1022,7 +1018,7 @@ pub fn reset_instance_state(conn: &DbConn) -> Result<()> {
   conn.transaction(|| {
     let active_game_id = game::table
       .select(g::id)
-      .filter(g::status.ne(all(&[GameStatus::Ended, GameStatus::Terminated] as &[_])));
+      .filter(g::status.eq_any(GameStatus::active_variants()));
     diesel::update(game_used_slot::table.filter(gus::game_id.eq(any(active_game_id))))
       .set(gus::client_status_synced_node_conn_id.eq(Option::<i64>::None))
       .execute(conn)?;
@@ -1038,7 +1034,7 @@ pub fn get_node_active_game_ids(conn: &DbConn, node_id: i32) -> Result<Vec<i32>>
     .select(g::id)
     .filter(
       g::status
-        .ne(all(&[GameStatus::Ended, GameStatus::Terminated] as &[_]))
+        .eq_any(GameStatus::active_variants())
         .and(g::node_id.eq(node_id)),
     )
     .load(conn)
@@ -1238,19 +1234,19 @@ impl UsedSlotUpdate {
 pub fn cleanup_orphaned_slots(conn: &DbConn, game_ids: &[i32]) -> Result<(usize, usize)> {
   use game::dsl as g;
   use game_used_slot::dsl as gus;
-  
+
   conn.transaction(|| {
     // Update game table to mark games as Ended
     let updated_games = diesel::update(game::table)
       .filter(g::id.eq_any(game_ids))
-      .filter(g::status.ne_all(&[GameStatus::Ended, GameStatus::Terminated]))
+      .filter(g::status.eq_any(GameStatus::active_variants()))
       .set(g::status.eq(GameStatus::Ended))
       .execute(conn)?;
-    
+
     if updated_games > 0 {
       tracing::info!("Marked {} orphaned games as Ended", updated_games);
     }
-    
+
     // Update game_used_slot table to mark slots as Left
     let updated_slots = diesel::update(game_used_slot::table)
       .filter(gus::game_id.eq_any(game_ids))
@@ -1258,11 +1254,11 @@ pub fn cleanup_orphaned_slots(conn: &DbConn, game_ids: &[i32]) -> Result<(usize,
       .filter(gus::client_status.ne(SlotClientStatus::Left))
       .set(gus::client_status.eq(SlotClientStatus::Left))
       .execute(conn)?;
-    
+
     if updated_slots > 0 {
       tracing::info!("Cleaned up {} orphaned game slots", updated_slots);
     }
-    
+
     Ok((updated_games, updated_slots))
   })
 }

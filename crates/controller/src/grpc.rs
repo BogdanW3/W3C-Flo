@@ -46,6 +46,7 @@ pub async fn serve(state: ControllerStateRef) -> Result<()> {
     )
     .into_inner();
   let server = Server::builder().layer(layer).add_service(server);
+  tracing::info!("Serving gRPC at {:?}", addr);
   server.serve(addr.into()).await?;
   Ok(())
 }

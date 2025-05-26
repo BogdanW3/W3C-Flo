@@ -12,6 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
   #[cfg(not(debug_assertions))]
   flo_log_subscriber::init();
 
+  tracing::info!("Starting flo-controller-service");
   let state = ControllerState::init().await?.into_ref();
 
   #[cfg(unix)]
@@ -32,6 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
   }
 
+  tracing::info!("Initiating gRPC and socket serving");
   tokio::try_join!(serve_grpc(state.clone()), serve_socket(state.clone()))?;
 
   Ok(())
