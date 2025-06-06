@@ -486,14 +486,19 @@ impl Actor for ControllerStream {
               tracing::error!("controller stream error: {}", err);
             }
 
+            let (error_message_text, reject_reason) = match &err {
+              Error::ConnectionRequestRejected(reason) => {
+                (format!("server rejected: {:?}", reason), reason.clone())
+              }
+              other => (other.to_string(), RejectReason::Unknown),
+            };
+
             SendWs::new(
               id,
-              OutgoingMessage::ConnectRejected(messages::ErrorMessage::new(match &err {
-                Error::ConnectionRequestRejected(reason) => {
-                  format!("server rejected: {:?}", reason)
-                }
-                other => other.to_string(),
-              })),
+              OutgoingMessage::ConnectRejected(messages::ConnectRejected {
+                message: error_message_text,
+                reason: reject_reason,
+              }),
             )
             .notify(&parent)
             .await
