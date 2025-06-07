@@ -16,7 +16,7 @@ use crate::error::*;
 use crate::packet::{FloPacket, Frame};
 use tokio::io::AsyncWriteExt;
 
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(15);
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug)]
 pub struct FloStream {

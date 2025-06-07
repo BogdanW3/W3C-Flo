@@ -26,8 +26,8 @@ pub enum Error {
   SlotNotResolved,
   #[error("Stream closed unexpectedly")]
   StreamClosed,
-  #[error("Disconnected from Flo controller")]
-  ControllerDisconnected,
+  #[error("Disconnected from Flo controller: {0}")]
+  ControllerDisconnected(anyhow::Error),
   #[error("Invalid map info")]
   InvalidMapInfo,
   #[error("Invalid observer data frame")]

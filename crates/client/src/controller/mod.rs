@@ -131,7 +131,9 @@ impl ControllerClient {
       stream.send(SendFrame(frame)).await??;
       Ok(())
     } else {
-      Err(Error::ControllerDisconnected)
+      Err(Error::ControllerDisconnected(anyhow::anyhow!(
+        "No connection available to send frame"
+      )))
     }
   }
 }
@@ -216,11 +218,17 @@ impl Handler<ControllerEvent> for ControllerClient {
         match data {
           ControllerEventData::Connected => {}
           ControllerEventData::ConnectionError(err) => {
-            tracing::error!("connection error: {}", err);
-            if let Some(stream) = self.conn.take() {
-              ctx.spawn(async move {
-                stream.shutdown().await.ok();
-              });
+            tracing::error!(
+              should_terminate = err.should_terminate,
+              "connection error: {:?}",
+              err.error
+            );
+            if err.should_terminate {
+              if let Some(stream) = self.conn.take() {
+                ctx.spawn(async move {
+                  stream.shutdown().await.ok();
+                });
+              }
             }
           }
           ControllerEventData::PlayerSessionUpdate(event) => match event {
@@ -270,13 +278,19 @@ impl Handler<ControllerEvent> for ControllerClient {
               tracing::error!("select active node: {}", err);
             }
           }
-          ControllerEventData::Disconnected => {
-            if let Some(stream) = self.conn.take() {
-              ctx.spawn(async move {
-                stream.shutdown().await.ok();
-              });
+          ControllerEventData::Disconnected(disconnected) => {
+            tracing::info!(
+              should_terminate = disconnected.should_terminate,
+              "controller disconnected"
+            );
+            if disconnected.should_terminate {
+              if let Some(stream) = self.conn.take() {
+                ctx.spawn(async move {
+                  stream.shutdown().await.ok();
+                });
+              }
+              self.message_session.take();
             }
-            self.message_session.take();
           }
         }
       }
@@ -369,6 +383,7 @@ impl Handler<ReplaceSession> for ControllerClient {
         .send_or_discard(OutgoingMessage::Disconnect(messages::Disconnect {
           reason: messages::DisconnectReason::Multi,
           message: "Another client took up the connection.".to_string(),
+          will_retry: false,
         }))
         .await;
     }

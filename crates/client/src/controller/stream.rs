@@ -3,7 +3,7 @@ use crate::error::*;
 use crate::game::local_game_from_game_info;
 //use crate::game::LocalGameInfo;
 use crate::message::messages;
-use crate::message::messages::OutgoingMessage;
+use crate::message::messages::{ConnectRetrying, OutgoingMessage};
 use crate::node::{AddNode, GetNodePingMap, NodeRegistry, RemoveNode, UpdateNodes};
 use crate::ping::PingUpdate;
 use crate::platform::{CalcMapChecksum, GetClientPlatformInfo, Platform};
@@ -16,10 +16,21 @@ use s2_grpc_utils::S2ProtoPack;
 use s2_grpc_utils::{S2ProtoEnum, S2ProtoUnpack};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
 use tracing_futures::Instrument;
+
+struct ConnectionResult {
+  result: Result<()>,
+  duration: Duration,
+}
+
+enum ConnectionAction {
+  Continue(String), // Includes reason for retry
+  Break,
+}
 
 pub struct ControllerStream {
   id: u64,
@@ -58,12 +69,393 @@ impl ControllerStream {
     }
   }
 
+  async fn run_connection_worker(
+    id: u64,
+    domain: String,
+    token: String,
+    owner: Addr<Self>,
+    parent: Addr<ControllerClient>,
+    nodes: Addr<NodeRegistry>,
+    is_shutting_down: Arc<AtomicBool>,
+  ) {
+    let mut iteration_count = 0u32;
+    let mut retry_count = 0u32;
+    let mut ping_cancel_token: Option<CancellationToken> = None;
+
+    loop {
+      iteration_count += 1;
+
+      tracing::info!(
+        iteration = iteration_count,
+        retry = retry_count,
+        "starting connection attempt"
+      );
+
+      // Setup for this connection attempt
+      if let Some(setup_result) =
+        Self::setup_connection_attempt(&mut ping_cancel_token, id, &owner, &parent, &nodes).await
+      {
+        match setup_result {
+          Ok(frame_rx) => {
+            // Execute the connection attempt
+            let outcome = Self::execute_connection_attempt(
+              id,
+              &domain,
+              &token,
+              frame_rx,
+              &owner,
+              &parent,
+              &nodes,
+              iteration_count,
+              retry_count,
+            )
+            .await;
+
+            // Handle the connection outcome
+            match Self::handle_connection_outcome(
+              outcome,
+              &mut retry_count,
+              &parent,
+              &is_shutting_down,
+              id,
+            )
+            .await
+            {
+              ConnectionAction::Continue(reason) => {
+                // Calculate and wait for retry delay
+                Self::wait_for_retry(id, &mut retry_count, &parent, reason).await;
+              }
+              ConnectionAction::Break => break,
+            }
+          }
+          Err(_) => {
+            tracing::error!("failed to setup connection attempt, exiting");
+            break;
+          }
+        }
+      } else {
+        break;
+      }
+
+      // Check if we're shutting down before retrying
+      if is_shutting_down.load(Ordering::SeqCst) {
+        tracing::info!("shutting down, stopping retry loop");
+        break;
+      }
+    }
+
+    // Cancel any remaining ping task when exiting
+    if let Some(token) = ping_cancel_token.take() {
+      token.cancel();
+    }
+
+    tracing::debug!("exiting");
+  }
+
+  async fn send_error_notifications(
+    id: u64,
+    err: Error,
+    parent: &Addr<ControllerClient>,
+    should_terminate: bool,
+  ) {
+    let (error_message_text, reject_reason) = match &err {
+      Error::ConnectionRequestRejected(reason) => {
+        (format!("server rejected: {:?}", reason), reason.clone())
+      }
+      other => (other.to_string(), RejectReason::Unknown),
+    };
+
+    SendWs::new(
+      id,
+      OutgoingMessage::ConnectRejected(messages::ConnectRejected {
+        message: error_message_text,
+        reason: reject_reason,
+        will_retry: !should_terminate,
+      }),
+    )
+    .notify(parent)
+    .await
+    .ok();
+
+    parent
+      .notify(
+        ControllerEventData::ConnectionError(ConnectionError {
+          error: err,
+          should_terminate,
+        })
+        .wrap(id),
+      )
+      .await
+      .ok();
+  }
+
+  async fn send_disconnect_notifications(
+    id: u64,
+    parent: &Addr<ControllerClient>,
+    should_terminate: bool,
+  ) {
+    // Send disconnect message to frontend
+    SendWs::new(
+      id,
+      OutgoingMessage::Disconnect(messages::Disconnect {
+        reason: messages::DisconnectReason::Unknown,
+        message: "Connection failed".to_string(),
+        will_retry: !should_terminate,
+      }),
+    )
+    .notify(parent)
+    .await
+    .ok();
+
+    // Send disconnect event to parent controller
+    parent
+      .notify(ControllerEventData::Disconnected(Disconnected { should_terminate }).wrap(id))
+      .await
+      .ok();
+  }
+
+  async fn setup_connection_attempt(
+    ping_cancel_token: &mut Option<CancellationToken>,
+    id: u64,
+    owner: &Addr<Self>,
+    parent: &Addr<ControllerClient>,
+    nodes: &Addr<NodeRegistry>,
+  ) -> Option<Result<Receiver<Frame>, ()>> {
+    // Cancel previous ping task if it exists
+    if let Some(token) = ping_cancel_token.take() {
+      tracing::debug!("cancelling previous ping task");
+      token.cancel();
+    }
+
+    // Create new channel and ping task for this connection attempt
+    let (new_tx, new_rx) = channel(5);
+
+    // Update the owner's frame_tx for this attempt
+    if let Err(_) = owner
+      .send(UpdateFrameTx {
+        frame_tx: new_tx.clone(),
+      })
+      .await
+    {
+      tracing::error!("failed to update frame_tx, owner may be gone");
+      return None;
+    }
+
+    // Start new ping task for this connection attempt
+    *ping_cancel_token = Some(Self::spawn_ping_task(id, new_tx, parent, nodes));
+    tracing::debug!("started new ping task for connection attempt");
+
+    Some(Ok(new_rx))
+  }
+
+  async fn execute_connection_attempt(
+    id: u64,
+    domain: &str,
+    token: &str,
+    frame_rx: Receiver<Frame>,
+    owner: &Addr<Self>,
+    parent: &Addr<ControllerClient>,
+    nodes: &Addr<NodeRegistry>,
+    iteration_count: u32,
+    retry_count: u32,
+  ) -> ConnectionResult {
+    let start_time = Instant::now();
+
+    let result = Self::connect_and_serve(
+      id,
+      domain,
+      token.to_string(),
+      frame_rx,
+      owner.clone(),
+      parent.clone(),
+      nodes.clone(),
+    )
+    .instrument(tracing::info_span!(
+      "connect_and_serve",
+      iteration = iteration_count,
+      retry = retry_count
+    ))
+    .await;
+
+    ConnectionResult {
+      result,
+      duration: start_time.elapsed(),
+    }
+  }
+
+  async fn handle_connection_outcome(
+    outcome: ConnectionResult,
+    retry_count: &mut u32,
+    parent: &Addr<ControllerClient>,
+    is_shutting_down: &Arc<AtomicBool>,
+    id: u64,
+  ) -> ConnectionAction {
+    const RESET_THRESHOLD: Duration = Duration::from_secs(60);
+
+    match outcome.result {
+      Ok(_) => {
+        // When the handler disconnected without an error, it means we should terminate
+        tracing::info!(
+          "connection ended with explicit disconnect after {:?}, terminating",
+          outcome.duration
+        );
+        // Send disconnect notifications for graceful termination
+        Self::send_disconnect_notifications(id, parent, true).await;
+        ConnectionAction::Break
+      }
+      Err(err) => {
+        // Check termination conditions
+        if is_shutting_down.load(Ordering::SeqCst) && matches!(err, Error::TaskCancelled(_)) {
+          tracing::debug!("controller stream cancelled during shutdown: {}", err);
+          // Only send disconnect notifications for explicit shutdowns
+          Self::send_disconnect_notifications(id, parent, true).await;
+          return ConnectionAction::Break;
+        }
+
+        // Check for non-recoverable rejection reasons
+        if let Error::ConnectionRequestRejected(reason) = &err {
+          if !matches!(reason, RejectReason::Unknown) {
+            tracing::error!(
+              "connection rejected with non-recoverable reason: {:?}",
+              reason
+            );
+            Self::send_error_notifications(id, err, parent, true).await;
+            // Only send disconnect notifications for explicit rejections
+            Self::send_disconnect_notifications(id, parent, true).await;
+            return ConnectionAction::Break;
+          }
+        }
+
+        // Reset retry count if connection lasted more than 60 seconds before failing
+        if outcome.duration >= RESET_THRESHOLD {
+          *retry_count = 0;
+          tracing::debug!(
+            "connection lasted {:?} before failing, resetting retry count",
+            outcome.duration
+          );
+        }
+
+        let error_string = err.to_string();
+        tracing::error!("controller stream error: {}", err);
+        // Send error notifications for all errors that reach here
+        Self::send_error_notifications(id, err, parent, false).await;
+        ConnectionAction::Continue(error_string)
+      }
+    }
+  }
+
+  async fn wait_for_retry(
+    id: u64,
+    retry_count: &mut u32,
+    parent: &Addr<ControllerClient>,
+    reason: String,
+  ) {
+    const MIN_DELAY: Duration = Duration::from_secs(5);
+    const MAX_DELAY: Duration = Duration::from_secs(30);
+    const EXPONENT: f64 = 1.3;
+    const MAX_RETRY_COUNT: u32 = 20; // Cap to prevent overflow
+
+    // Calculate exponential backoff delay with capped retry count
+    let capped_retry_count = (*retry_count).min(MAX_RETRY_COUNT);
+    let delay_secs = MIN_DELAY.as_secs_f64() * EXPONENT.powi(capped_retry_count as i32);
+    let delay = Duration::from_secs_f64(delay_secs).min(MAX_DELAY);
+    *retry_count += 1;
+
+    tracing::info!(
+      "retrying connection in {:?} (attempt #{}) - reason: {}",
+      delay,
+      *retry_count,
+      reason
+    );
+
+    // Send retry notification to the upstream application
+    if let Err(_) = parent
+      .notify(SendWs::new(
+        id,
+        OutgoingMessage::ConnectRetrying(ConnectRetrying {
+          attempt: *retry_count,
+          delay_secs: delay.as_secs(),
+          reason,
+        }),
+      ))
+      .await
+    {
+      tracing::warn!("failed to send ConnectRetrying message");
+    }
+
+    sleep(delay).await;
+  }
+
+  fn spawn_ping_task(
+    id: u64,
+    frame_tx: Sender<Frame>,
+    parent: &Addr<ControllerClient>,
+    nodes: &Addr<NodeRegistry>,
+  ) -> CancellationToken {
+    let ping_token = CancellationToken::new();
+    tokio::spawn({
+      let frame_tx = frame_tx;
+      let parent = parent.clone();
+      let nodes = nodes.clone();
+      let token = ping_token.clone();
+      async move {
+        // Initial delay before starting ping reports
+        sleep(Duration::from_secs(2)).await;
+        loop {
+          tokio::select! {
+            _ = token.cancelled() => {
+              tracing::debug!("ping task cancelled");
+              break;
+            }
+            _ = sleep(Duration::from_secs(5)) => {
+              // Check cancellation before attempting to report ping
+              if token.is_cancelled() {
+                tracing::debug!("ping task cancelled before ping report");
+                break;
+              }
+              tokio::select! {
+                _ = token.cancelled() => {
+                  tracing::debug!("ping task cancelled during ping report");
+                  break;
+                }
+                result = Self::report_ping(id, frame_tx.clone(), &parent, &nodes) => {
+                  if let Err(err) = result {
+                    // Don't log as error if it's just a cancelled task - this is expected during connection retries
+                    if matches!(err, Error::TaskCancelled(_)) {
+                      tracing::debug!("ping report failed due to cancelled task: {}", err);
+                      // If the frame channel is closed, we should exit the ping task
+                      if frame_tx.is_closed() {
+                        tracing::debug!("frame channel closed, stopping ping task");
+                        break;
+                      }
+                    } else {
+                      tracing::error!("report ping: {}", err);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      .instrument(tracing::debug_span!("ping_task", worker_id = id))
+    });
+    ping_token
+  }
+
   async fn report_ping(
     id: u64,
     frame_tx: Sender<Frame>,
     parent: &Addr<ControllerClient>,
     nodes: &Addr<NodeRegistry>,
   ) -> Result<()> {
+    // Check if the channel is closed before doing any work
+    if frame_tx.is_closed() {
+      return Err(Error::TaskCancelled(anyhow::format_err!(
+        "frame channel is closed"
+      )));
+    }
+
     let ping_map = nodes.send(GetNodePingMap).await??;
     parent
       .notify(SendWs::new(
@@ -73,6 +465,14 @@ impl ControllerStream {
         }),
       ))
       .await?;
+
+    // Check again before sending to frame_tx
+    if frame_tx.is_closed() {
+      return Err(Error::TaskCancelled(anyhow::format_err!(
+        "frame channel is closed"
+      )));
+    }
+
     frame_tx
       .send(
         proto::PacketPlayerPingMapUpdateRequest {
@@ -155,8 +555,6 @@ impl ControllerStream {
       ))
       .await?;
 
-    let mut disconnect_handled = false;
-
     loop {
       tokio::select! {
         next_send = frame_receiver.recv() => {
@@ -165,7 +563,7 @@ impl ControllerStream {
               Ok(_) => {},
               Err(e) => {
                 tracing::debug!("exiting: send error: {}", e);
-                break;
+                return Err(Error::ControllerDisconnected(e.into()));
               }
             }
           } else {
@@ -184,7 +582,7 @@ impl ControllerStream {
                   },
                   Err(e) => {
                     tracing::debug!("exiting: send error: {}", e);
-                    break;
+                    return Err(Error::ControllerDisconnected(e.into()));
                   }
                 }
               }
@@ -198,36 +596,23 @@ impl ControllerStream {
               }
 
               if type_id == PacketTypeId::LobbyDisconnect {
-                disconnect_handled = true;
+                tracing::info!("lobby disconnect received");
+                // TODO: This packet is currently never thrown, but if it does,
+                // we might want to have special handling to not consider it an error.
+                break;
               }
             },
             Err(e) => {
               tracing::debug!("exiting: recv: {}", e);
-              break;
+              return Err(Error::ControllerDisconnected(e.into()));
             }
           }
         }
       }
     }
 
-    if !disconnect_handled {
-      parent
-        .notify(SendWs::new(
-          id,
-          OutgoingMessage::Disconnect(messages::Disconnect {
-            reason: messages::DisconnectReason::Unknown,
-            message: "Server connection closed".to_string(),
-          }),
-        ))
-        .await?;
-    }
-
-    parent
-      .notify(ControllerEventData::Disconnected.wrap(id))
-      .await?;
-
     tracing::debug!("exiting");
-
+    // Getting to this point means we want to actively terminate without retries.
     Ok(())
   }
 
@@ -246,7 +631,8 @@ impl ControllerStream {
         p: proto::PacketClientDisconnect => {
           SendWs::new(id, OutgoingMessage::Disconnect(messages::Disconnect {
               reason: S2ProtoEnum::unpack_i32(p.reason)?,
-              message: format!("Server closed the connection: {:?}", p.reason)
+              message: format!("Server closed the connection: {:?}", p.reason),
+              will_retry: false,
             })).notify(parent).await?;
         }
         p: proto::PacketGameInfo => {
@@ -442,7 +828,7 @@ impl Drop for ControllerStream {
 #[async_trait]
 impl Actor for ControllerStream {
   async fn started(&mut self, ctx: &mut Context<Self>) {
-    let frame_rx = if let Some(rx) = self.frame_rx.take() {
+    let _frame_rx = if let Some(rx) = self.frame_rx.take() {
       rx
     } else {
       let (frame_tx, frame_rx) = channel(5);
@@ -450,69 +836,16 @@ impl Actor for ControllerStream {
       frame_rx
     };
 
-    ctx.spawn({
-      let id = self.id;
-      let frame_tx = self.frame_tx.clone();
-      let parent = self.parent.clone();
-      let nodes = self.nodes.clone();
-      async move {
-        sleep(Duration::from_secs(2)).await;
-        loop {
-          if let Err(err) = Self::report_ping(id, frame_tx.clone(), &parent, &nodes).await {
-            tracing::error!("report ping: {}", err)
-          }
-          sleep(Duration::from_secs(5)).await;
-        }
-      }
-    });
-
     ctx.spawn(
-      {
-        let id = self.id;
-        let domain = self.domain.clone();
-        let token = self.token.clone();
-        let owner = ctx.addr();
-        let parent = self.parent.clone();
-        let nodes = self.nodes.clone();
-        let is_shutting_down = self.is_shutting_down.clone();
-        async move {
-          if let Err(err) =
-            Self::connect_and_serve(id, &domain, token, frame_rx, owner, parent.clone(), nodes)
-              .await
-          {
-            if is_shutting_down.load(Ordering::SeqCst) && matches!(err, Error::TaskCancelled(_)) {
-              tracing::debug!("controller stream cancelled during shutdown: {}", err);
-            } else {
-              tracing::error!("controller stream error: {}", err);
-            }
-
-            let (error_message_text, reject_reason) = match &err {
-              Error::ConnectionRequestRejected(reason) => {
-                (format!("server rejected: {:?}", reason), reason.clone())
-              }
-              other => (other.to_string(), RejectReason::Unknown),
-            };
-
-            SendWs::new(
-              id,
-              OutgoingMessage::ConnectRejected(messages::ConnectRejected {
-                message: error_message_text,
-                reason: reject_reason,
-              }),
-            )
-            .notify(&parent)
-            .await
-            .ok();
-
-            parent
-              .notify(ControllerEventData::ConnectionError(err).wrap(id))
-              .await
-              .ok();
-          }
-
-          tracing::debug!("exiting");
-        }
-      }
+      Self::run_connection_worker(
+        self.id,
+        self.domain.clone(),
+        self.token.clone(),
+        ctx.addr(),
+        self.parent.clone(),
+        self.nodes.clone(),
+        self.is_shutting_down.clone(),
+      )
       .instrument(tracing::debug_span!("worker", id = self.id)),
     );
   }
@@ -707,6 +1040,27 @@ impl Handler<SendFrame> for ControllerStream {
   }
 }
 
+struct UpdateFrameTx {
+  frame_tx: Sender<Frame>,
+}
+
+impl Message for UpdateFrameTx {
+  type Result = Result<()>;
+}
+
+#[async_trait]
+impl Handler<UpdateFrameTx> for ControllerStream {
+  async fn handle(
+    &mut self,
+    _: &mut Context<Self>,
+    UpdateFrameTx { frame_tx }: UpdateFrameTx,
+  ) -> <UpdateFrameTx as Message>::Result {
+    self.frame_tx = frame_tx;
+    tracing::debug!("updated frame_tx for new connection attempt");
+    Ok(())
+  }
+}
+
 #[derive(Debug)]
 pub struct ControllerEvent {
   pub id: u64,
@@ -720,18 +1074,29 @@ impl Message for ControllerEvent {
 #[derive(Debug)]
 pub enum ControllerEventData {
   Connected,
-  ConnectionError(Error),
+  ConnectionError(ConnectionError),
   PlayerSessionUpdate(PlayerSessionUpdateEvent),
   GameInfoUpdate(GameInfoUpdateEvent),
   GameReceived(GameReceivedEvent),
   SelectNode(Option<i32>),
-  Disconnected,
+  Disconnected(Disconnected),
 }
 
 impl ControllerEventData {
   fn wrap(self, id: u64) -> ControllerEvent {
     ControllerEvent { id, data: self }
   }
+}
+
+#[derive(Debug)]
+pub struct Disconnected {
+  pub should_terminate: bool,
+}
+
+#[derive(Debug)]
+pub struct ConnectionError {
+  pub error: Error,
+  pub should_terminate: bool,
 }
 
 #[derive(Debug)]

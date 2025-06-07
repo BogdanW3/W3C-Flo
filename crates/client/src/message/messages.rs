@@ -48,6 +48,7 @@ pub enum OutgoingMessage {
   ReloadClientInfoError(ErrorMessage),
   PlayerSession(PlayerSession),
   ConnectRejected(ConnectRejected),
+  ConnectRetrying(ConnectRetrying),
   Disconnect(Disconnect),
   ListMaps(MapList),
   ListMapsError(ErrorMessage),
@@ -155,12 +156,21 @@ pub struct Connect {
 pub struct Disconnect {
   pub reason: DisconnectReason,
   pub message: String,
+  pub will_retry: bool,
 }
 
 #[derive(Debug, Serialize, Clone)]
 pub struct ConnectRejected {
   pub reason: RejectReason,
   pub message: String,
+  pub will_retry: bool,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct ConnectRetrying {
+  pub attempt: u32,
+  pub delay_secs: u64,
+  pub reason: String,
 }
 
 #[derive(Debug, Serialize, Clone)]
