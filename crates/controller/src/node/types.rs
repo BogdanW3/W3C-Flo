@@ -20,6 +20,8 @@ pub struct Node {
   pub country_id: String,
   #[s2_grpc(skip_pack)]
   pub disabled: bool,
+  #[s2_grpc(skip_pack)]
+  pub internal_address: Option<String>,
 }
 
 pub type NodeRefColumns = (
@@ -102,6 +104,7 @@ pub struct NodeConnConfig {
   pub id: i32,
   pub addr: String,
   pub secret: String,
+  pub internal_address: Option<String>,
 }
 
 impl<'a> From<&'a Node> for NodeConnConfig {
@@ -110,6 +113,7 @@ impl<'a> From<&'a Node> for NodeConnConfig {
       id: node.id,
       addr: node.ip_addr.clone(),
       secret: node.secret.clone(),
+      internal_address: node.internal_address.clone(),
     }
   }
 }

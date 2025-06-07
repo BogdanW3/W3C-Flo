@@ -75,6 +75,7 @@ diesel::table! {
         updated_at -> Timestamptz,
         country_id -> Text,
         disabled -> Bool,
+        internal_address -> Nullable<Text>,
     }
 }
 
@@ -120,12 +121,12 @@ diesel::joinable!(player -> api_client (api_client_id));
 diesel::joinable!(player_ban -> player (player_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
-    api_client,
-    game,
-    game_used_slot,
-    map_checksum,
-    node,
-    player,
-    player_ban,
-    player_mute,
+  api_client,
+  game,
+  game_used_slot,
+  map_checksum,
+  node,
+  player,
+  player_ban,
+  player_mute,
 );

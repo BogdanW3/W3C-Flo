@@ -17,6 +17,7 @@ async fn main() -> Result<()> {
       id: 0,
       addr: "127.0.0.1".to_string(),
       secret: "".to_string(),
+      internal_address: None,
     },
     game_registry_mock.addr(),
   )

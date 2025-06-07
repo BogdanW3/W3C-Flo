@@ -68,10 +68,12 @@ flo=# insert into player (name, source, source_id, api_client_id) values ('playe
 ```
 
 ### Add Node
-Insert a row into `node` with `secret` = `1111` (Corresponds to the FLO_NODE_SECRET value in above .env file)
+Insert a row into `node` with `secret` = `1111` (Corresponds to the FLO_NODE_SECRET value in above .env file).
+
+**Note:** If you are in an environment (like docker) where the visible IP (the client connects to) is not routable for the controller, then insert the client-routable IP as `ip_addr` while setting the internal address in the `internal_address` field. Note that `internal_address` might also be a DNS address, while `ip_addr` **has to** be an IPv4 address.
 
 ```
-flo=# insert into node (name, location, ip_addr, secret) values ('node1', 'Germany', '192.168.0.5', '1111');
+flo=# insert into node (name, location, ip_addr, secret, internal_address) values ('node1', 'Germany', '192.168.0.5', '1111', null);
 ```
 
 ### Start Node & Controller

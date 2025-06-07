@@ -5,6 +5,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_HOST_AUTH_METHOD: md5
+      POSTGRES_DB: flo
     image: postgres:13-alpine
     volumes:
       - database:/var/lib/postgresql/data
@@ -41,13 +42,43 @@ services:
     volumes:
       - ./.env:/usr/local/s2/.env
     depends_on:
-      - postgres
-      - node
+      postgres:
+        condition: service_started
+      node:
+        condition: service_started
+      db_initializer:
+        condition: service_completed_successfully
     ports:
      - '127.0.0.1:3549:3549'
      - '127.0.0.1:3550:3550'
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/flo
+
+  db_initializer:
+    container_name: flo-db-initializer
+    build:
+      context: .
+      dockerfile: local-init/db-initializer.Dockerfile
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: flo
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      NODE_EXTERNAL_IP: 127.0.0.1
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/flo
+    volumes:
+      - ./migrations:/usr/local/flo/migrations
+      - ./diesel.toml:/usr/local/flo/diesel.toml
+    depends_on:
+      - postgres
 
 volumes:
   database:
+
+networks:
+  default:
+    name: w3c-network-local
+    external: true

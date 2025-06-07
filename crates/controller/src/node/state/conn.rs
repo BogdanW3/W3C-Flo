@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 
 use crate::game::state::registry::Remove;
 use crate::player::PlayerBanType;
+use dns_lookup::lookup_host;
 use flo_net::ping::{PingMsg, PingStream};
 use futures::StreamExt;
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -209,7 +210,13 @@ impl Handler<Connect> for NodeConnActor {
       return;
     }
 
-    let (ip, port) = match parse_addr(&self.config.addr) {
+    // Use internal_address if available for controller-internal flow, otherwise use addr
+    let address_to_use = self
+      .config
+      .internal_address
+      .as_ref()
+      .unwrap_or(&self.config.addr);
+    let (ip, port) = match parse_addr(address_to_use) {
       Ok(v) => v,
       Err(err) => {
         self.status = NodeConnStatus::Error;
@@ -447,6 +454,25 @@ enum NodeConnStatus {
   Error,
 }
 
+fn resolve_host_to_ipv4(host: &str) -> Result<Ipv4Addr> {
+  let ips = lookup_host(host).map_err(|e| Error::InvalidNodeAddress(format!("{}: {}", host, e)))?;
+  let ipv4_ips: Vec<Ipv4Addr> = ips
+    .into_iter()
+    .filter_map(|ip| match ip {
+      std::net::IpAddr::V4(ipv4) => Some(ipv4),
+      _ => None,
+    })
+    .collect();
+
+  if ipv4_ips.is_empty() {
+    return Err(Error::InvalidNodeAddress(format!(
+      "no ipv4 address found for: {}",
+      host
+    )));
+  }
+  Ok(ipv4_ips[0])
+}
+
 fn parse_addr(addr: &str) -> Result<(Ipv4Addr, u16)> {
   let (ip, port) = if addr.contains(":") {
     let addr = if let Some(addr) = addr.parse::<SocketAddrV4>().ok() {
@@ -460,10 +486,11 @@ fn parse_addr(addr: &str) -> Result<(Ipv4Addr, u16)> {
       addr.port() + flo_constants::NODE_CONTROLLER_PORT_OFFSET,
     )
   } else {
-    let addr: Ipv4Addr = if let Some(addr) = addr.parse::<Ipv4Addr>().ok() {
-      addr
+    let addr_result: Result<Ipv4Addr, _> = addr.parse();
+    let addr: Ipv4Addr = if let Ok(ipv4_addr) = addr_result {
+      ipv4_addr
     } else {
-      return Err(Error::InvalidNodeAddress(addr.to_string()));
+      resolve_host_to_ipv4(addr)?
     };
     let port = flo_constants::NODE_CONTROLLER_PORT;
     (addr, port)
