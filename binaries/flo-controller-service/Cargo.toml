@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 flo-log-subscriber = { path = "../../crates/log-subscriber" }
 flo-controller = { path = "../../crates/controller" }
+flo-otel = { path = "../../crates/otel" }
 
 tracing = "0.1"
 bs-diesel-utils = { git = "https://github.com/BSpaceinc/bs-diesel-utils.git" }

@@ -39,6 +39,14 @@ FLO_NODE_SECRET='1111'
 JWT_SECRET_BASE64=MTExMQ==
 ```
 
+Optional: If you would like to collect traces and metrics, set the these env-vars and point them to your OTEL-compatible collectors:
+```
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://jaeger:4317
+OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://otel-collector:4318
+OTEL_SERVICE_NAME: flo-controller-local
+OTEL_DEPLOYMENT_ENVIRONMENT: local
+```
+
 ### Run migration to create db schema
 
 ```

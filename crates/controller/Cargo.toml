@@ -13,6 +13,7 @@ flo-log = { path = "../log" }
 flo-task = { path = "../task" }
 flo-state = "1"
 flo-types = { path = "../types" }
+flo-otel = { path = "../otel" }
 
 thiserror = "1.0"
 serde = { version = "1", features = ["derive"] }

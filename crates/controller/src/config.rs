@@ -2,6 +2,7 @@ use arc_swap::ArcSwap;
 use bs_diesel_utils::{DbConn, ExecutorRef};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
+use flo_otel::grpc::apply_w3c_trace_context;
 use once_cell::sync::Lazy;
 use std::collections::BTreeMap;
 use std::env;
@@ -89,6 +90,12 @@ pub struct FloGrpcInterceptor {
 
 impl Interceptor for FloGrpcInterceptor {
   fn call(&mut self, mut req: tonic::Request<()>) -> Result<tonic::Request<()>, Status> {
+    // Apply W3C trace context from incoming request for distributed tracing
+    let parent_context = apply_w3c_trace_context(req.metadata());
+
+    // Store context in request extensions for potential future use
+    req.extensions_mut().insert(parent_context);
+
     let secret = req.metadata().get(REQUEST_META_SECRET);
     match secret {
       Some(secret) => match self.api_client_map.load().get(secret.as_bytes()) {
@@ -112,6 +119,9 @@ impl Interceptor for FloGrpcInterceptor {
     }
   }
 }
+
+// Re-export the inject function from flo-otel for convenience
+pub use flo_otel::grpc::inject_trace_context_into_request;
 
 impl ConfigStorage {
   async fn load_map(db: &ExecutorRef) -> Result<BTreeMap<Vec<u8>, ApiClient>> {

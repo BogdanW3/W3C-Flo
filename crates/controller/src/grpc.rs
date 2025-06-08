@@ -10,7 +10,7 @@ use crate::game::state::start::{StartGameCheckAsBot, StartGameCheckAsBotResult};
 use crate::node::messages::ListNode;
 use crate::player::state::ping::GetPlayersPingSnapshot;
 use crate::player::{PlayerBanType, PlayerSource, SourceState};
-use crate::state::{ActorMapExt, ControllerStateRef};
+use crate::state::{ActorMapExt, ControllerStateRef, Reload};
 use bs_diesel_utils::executor::ExecutorError;
 use chrono::{DateTime, Utc};
 use flo_grpc::controller::flo_controller_server::*;
@@ -63,6 +63,7 @@ impl FloControllerService {
 
 #[tonic::async_trait]
 impl FloController for FloControllerService {
+  #[tracing::instrument(skip(self, request), fields(request_message = ?request.get_ref()))]
   async fn get_player(
     &self,
     request: Request<GetPlayerRequest>,
@@ -132,6 +133,7 @@ impl FloController for FloControllerService {
     }))
   }
 
+  #[tracing::instrument(skip(self, _request))]
   async fn list_nodes(&self, _request: Request<()>) -> Result<Response<ListNodesReply>, Status> {
     let nodes = self.state.nodes.send(ListNode).await.map_err(Error::from)?;
     Ok(Response::new(ListNodesReply {
@@ -139,6 +141,7 @@ impl FloController for FloControllerService {
     }))
   }
 
+  #[tracing::instrument(skip(self, request), fields(request_message = ?request.get_ref()))]
   async fn list_games(
     &self,
     request: Request<ListGamesRequest>,
@@ -155,15 +158,20 @@ impl FloController for FloControllerService {
     Ok(Response::new(r.pack().map_err(Error::from)?))
   }
 
+  #[tracing::instrument(skip(self, request), fields(request_message = ?request.get_ref()))]
   async fn get_game(
     &self,
     request: Request<GetGameRequest>,
   ) -> Result<Response<GetGameReply>, Status> {
+    let span = tracing::Span::current();
     let game_id = request.into_inner().game_id;
     let game = self
       .state
       .db
-      .exec(move |conn| crate::game::db::get_full(conn, game_id))
+      .exec(move |conn| {
+        let _enter = span.enter();
+        crate::game::db::get_full(conn, game_id)
+      })
       .await
       .map_err(|e| match e {
         ExecutorError::Task(Error::GameNotFound) => Status::invalid_argument(e.to_string()),
@@ -548,6 +556,7 @@ impl FloController for FloControllerService {
     Ok(Response::new(()))
   }
 
+  #[tracing::instrument(skip(self, _request))]
   async fn reload(&self, _request: Request<()>) -> Result<Response<()>, Status> {
     self.state.reload().await?;
     Ok(Response::new(()))
@@ -586,7 +595,11 @@ impl FloController for FloControllerService {
       .transpose()
       .map_err(Status::internal)?;
     // Because of backwards compatibility in gRPC, we had to mark the field as optional, hence enforce it here
-    let author = params.clone().author.filter(|a| !a.trim().is_empty()).ok_or_else(|| Status::invalid_argument("Author is required"))?;
+    let author = params
+      .clone()
+      .author
+      .filter(|a| !a.trim().is_empty())
+      .ok_or_else(|| Status::invalid_argument("Author is required"))?;
     self
       .state
       .db

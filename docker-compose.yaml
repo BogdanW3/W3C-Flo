@@ -55,6 +55,12 @@ services:
       - .env
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/flo
+      # You need to run an instance of jaeger within your docker compose network
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://jaeger:4317
+      # You need to run an instance of otel-collector within your docker compose network
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: flo-controller-local-compose
+      OTEL_DEPLOYMENT_ENVIRONMENT: local-compose
 
   db_initializer:
     container_name: flo-db-initializer

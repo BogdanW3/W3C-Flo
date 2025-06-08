@@ -25,6 +25,7 @@ members = [
   "crates/observer-archiver",
   "crates/kinesis",
   "crates/replay",
+  "crates/otel",
 
   "crates/controller",
   "crates/node",

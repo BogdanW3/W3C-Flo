@@ -748,7 +748,7 @@ pub fn get_player_active_slots(conn: &DbConn, player_id: i32) -> Result<Vec<Play
     .load(conn)?;
   Ok(rows)
 }
-
+#[tracing::instrument(skip(conn))]
 pub fn get_full(conn: &DbConn, id: i32) -> Result<Game> {
   let row: GameRowWithRelated = game::table
     .find(id)
