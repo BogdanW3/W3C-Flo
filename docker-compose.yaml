@@ -17,7 +17,7 @@ services:
     container_name: flo-node
     build:
       context: .
-      dockerfile: build/node.Dockerfile
+      dockerfile: build/node_cached.Dockerfile
       args:
         BUILD_MODE: debug
     volumes:
@@ -36,7 +36,7 @@ services:
     container_name: flo-controller
     build:
       context: .
-      dockerfile: build/controller.Dockerfile
+      dockerfile: build/controller_cached.Dockerfile
       args:
         BUILD_MODE: debug
     volumes:
