@@ -1,0 +1,20 @@
+# Forked from https://github.com/wc3tools/flo-state/tree/7ac69995b7a4e055f58bb654ce6ac747e5bce4ae
+[package]
+name = "flo-state"
+version = "1.1.1"
+authors = ["Flux Xu <fluxxu@gmail.com>"]
+edition = "2018"
+description = "Lightweight actor library."
+license = "MIT"
+repository = "https://github.com/wc3tools/flo-state.git"
+
+[dependencies]
+tokio = { version = "1.2", features = ["sync", "macros", "rt-multi-thread", "time"] }
+tokio-util = { version = "0.6.3" }
+futures = "0.3"
+thiserror = "1.0"
+async-trait = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1.2", features = ["sync", "macros", "rt-multi-thread", "time"] }
+once_cell = "1.4" 

@@ -26,6 +26,7 @@ members = [
   "crates/kinesis",
   "crates/replay",
   "crates/otel",
+  "crates/state",
 
   "crates/controller",
   "crates/node",
@@ -53,7 +54,7 @@ casclib = { git = "https://github.com/w3champions/casclib-rs.git" }
 casclib-sys = { git = "https://github.com/w3champions/casclib-rs.git" }
 #s2-grpc-utils = { path = "../s2-grpc-utils" }
 s2-grpc-utils = { git = "https://github.com/Ventmere/s2-grpc-utils.git", branch = "0.2" }
-#flo-state = { path = "../flo-state" }
+flo-state = { path = "crates/state" }
 bs-diesel-utils = { git = "https://github.com/BSpaceinc/bs-diesel-utils.git" }
 async-dnssd = { git = "https://github.com/stbuehler/rust-async-dnssd.git" }
 

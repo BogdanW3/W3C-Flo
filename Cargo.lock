@@ -2096,11 +2096,10 @@ dependencies = [
 [[package]]
 name = "flo-state"
 version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e966d0a790054682bced8b31065e56ab3b95ac3a13e3815aa085ae81ea5b130"
 dependencies = [
  "async-trait",
  "futures 0.3.30",
+ "once_cell",
  "thiserror 1.0.61",
  "tokio",
  "tokio-util 0.6.10",
