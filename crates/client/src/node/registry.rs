@@ -344,28 +344,26 @@ impl Handler<SetNodeAddrOverrides> for NodeRegistry {
     _: &mut Context<Self>,
     SetNodeAddrOverrides { overrides }: SetNodeAddrOverrides,
   ) -> <SetNodeAddrOverrides as Message>::Result {
-    let mut addresses: Vec<_> = self
-      .map
-      .values()
-      .filter_map(|v| {
-        if !overrides.contains_key(&v.id) {
-          Some(v.socket_addr)
-        } else {
-          None
-        }
-      })
-      .collect();
-    for (id, addr) in overrides.iter() {
-      if self.map.contains_key(id) {
-        if !addresses.contains(addr) {
-          tracing::debug!(node_id = *id, "addr override: {}", addr);
-          addresses.push(*addr);
-        }
+    for (node_id, addr) in overrides.iter() {
+      if self.map.contains_key(node_id) {
+        tracing::debug!(node_id = *node_id, "addr override: {}", addr);
+        self.addr_overrides.insert(*node_id, *addr);
       } else {
-        tracing::warn!(node_id = *id, "addr override for unknown node");
+        tracing::warn!(node_id = *node_id, "addr override for unknown node");
       }
     }
-    self.addr_overrides = overrides;
+
+    let addresses: Vec<_> = self
+      .map
+      .values()
+      .map(|v| {
+        self
+          .addr_overrides
+          .get(&v.id)
+          .cloned()
+          .unwrap_or_else(|| v.socket_addr)
+      })
+      .collect();
     self.ping.notify(UpdateAddresses { addresses }).await?;
     Ok(())
   }
