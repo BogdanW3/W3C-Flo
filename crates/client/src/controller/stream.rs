@@ -499,12 +499,15 @@ impl ControllerStream {
     parent: Addr<ControllerClient>,
     nodes_reg: Addr<NodeRegistry>,
   ) -> Result<()> {
-    let addr = format!("{}:{}", domain, flo_constants::CONTROLLER_SOCKET_PORT);
-    tracing::debug!("connect addr: {}", addr);
+    let mut addr = domain.to_string();
+    if !addr.contains(':') {
+      addr = format!("{}:{}", addr, flo_constants::CONTROLLER_SOCKET_PORT);
+    }
+    tracing::info!("connecting to controller via addr: {}", addr);
 
     let mut stream = FloStream::connect_no_delay(addr).await?;
 
-    tracing::debug!("connected");
+    tracing::info!("connected to controller");
 
     stream
       .send(proto::PacketClientConnect {
