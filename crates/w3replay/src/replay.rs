@@ -104,23 +104,13 @@ impl<W: Write + Seek> ReplayEncoder<W> {
 
 fn get_header_game_version(version: &str) -> Result<GameVersion> {
   match version {
-    version if version.starts_with("1.32.") => Ok(GameVersion {
-      version: 10032,
-      build_number: 6110,
+    version if version.starts_with("2.0.3") => Ok(GameVersion {
+      version: 10100,
+      build_number: 6116,
       ..Default::default()
     }),
-    version if version.starts_with("1.33.0.") => Ok(GameVersion {
-      version: 10033,
-      build_number: 6114,
-      ..Default::default()
-    }),
-    version if version.starts_with("1.34.0.") => Ok(GameVersion {
-      version: 10034,
-      build_number: 6114,
-      ..Default::default()
-    }),
-    version if version.starts_with("1.35.0.") => Ok(GameVersion {
-      version: 10035,
+    version if version.starts_with("2.0.") => Ok(GameVersion {
+      version: 10100,
       build_number: 6115,
       ..Default::default()
     }),
@@ -129,9 +119,24 @@ fn get_header_game_version(version: &str) -> Result<GameVersion> {
       build_number: 6115,
       ..Default::default()
     }),
-    version if version.starts_with("2.0.") => Ok(GameVersion {
-      version: 10100,
+    version if version.starts_with("1.35.0.") => Ok(GameVersion {
+      version: 10035,
       build_number: 6115,
+      ..Default::default()
+    }),
+    version if version.starts_with("1.34.0.") => Ok(GameVersion {
+      version: 10034,
+      build_number: 6114,
+      ..Default::default()
+    }),
+    version if version.starts_with("1.33.0.") => Ok(GameVersion {
+      version: 10033,
+      build_number: 6114,
+      ..Default::default()
+    }),
+    version if version.starts_with("1.32.") => Ok(GameVersion {
+      version: 10032,
+      build_number: 6110,
       ..Default::default()
     }),
     other => Err(Error::UnsupportedGameVersion(other.to_string())),

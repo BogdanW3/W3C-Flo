@@ -14,6 +14,8 @@ pub enum MapFormatVersion {
   TFT131,
   #[bin(value = 31)]
   Reforged,
+  #[bin(value = 32)]
+  Reforged6116,
   UnknownValue(u32),
 }
 
@@ -56,6 +58,10 @@ pub struct MapInfo {
   pub asset_modes: Option<AssetMode>,
   #[bin(condition = "version >= MapFormatVersion::Reforged")]
   pub data_version: Option<GameDataVersion>,
+  #[bin(condition = "version >= MapFormatVersion::Reforged6116")]
+  pub default_cam_distance: Option<u32>,
+  #[bin(condition = "version >= MapFormatVersion::Reforged6116")]
+  pub force_cam_distance: Option<u32>,
   pub num_players: u32,
   #[bin(condition = "version < MapFormatVersion::Reforged")]
   #[bin(repeat = "num_players")]
