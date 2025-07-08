@@ -122,3 +122,4 @@ Open 2 Warcraft III to join both games and the game will start.
 - @Miezhiko -- initial Linux support
 - JSamir/tofik-mamisho -- [wc3-replay-parser](https://github.com/JSamir/wc3-replay-parser)
 - PBug90 -- [w3gjs](hhttps://github.com/PBug90/w3gjs)
+
