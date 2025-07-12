@@ -64,13 +64,17 @@ pub async fn serve(state: ControllerStateRef) -> Result<()> {
       let accepted = match handshake::handle_handshake(&mut stream).await {
         Ok(accepted) => accepted,
         Err(e) => {
-          tracing::debug!("dropping: handshake error: {}", e);
+          tracing::info!(
+            client_address = stream.peer_addr()?.to_string(),
+            "dropping connection attempt: handshake error: {}",
+            e
+          );
           return Ok(());
         }
       };
 
       let player_id = accepted.player_id;
-      tracing::debug!("accepted: player_id = {}", player_id);
+      tracing::info!(player_id, "accepted connection after handshake");
 
       if accepted.client_version < flo_constants::MIN_FLO_VERSION {
         stream
@@ -84,11 +88,11 @@ pub async fn serve(state: ControllerStateRef) -> Result<()> {
       }
 
       if let Err(err) = handle_stream(state.clone(), player_id, stream).await {
-        tracing::debug!("stream error: {}", err);
+        tracing::info!(player_id, "client stream error: {}", err);
       }
 
       state.players.send(Disconnect { player_id }).await?;
-      tracing::debug!("exiting: player_id = {}", player_id);
+      tracing::info!(player_id, "exiting client stream");
       Ok::<_, crate::error::Error>(())
     });
   }
@@ -129,7 +133,7 @@ async fn handle_stream(
           match msg {
             PlayerSenderMessage::Frame(frame) => {
               if let Err(e) = stream.send_frame_timeout(frame).await {
-                tracing::debug!("send error: {}", e);
+                tracing::info!(player_id, "send error while sending frame: {}", e);
                 break;
               }
             }
@@ -138,7 +142,7 @@ async fn handle_stream(
               if let Err(e) = stream.send(PacketClientDisconnect {
                 reason: reason.into()
               }).await {
-                tracing::debug!("send error: {}", e);
+                tracing::info!(player_id, "send error while sending disconnect: {}", e);
               }
               break;
             }

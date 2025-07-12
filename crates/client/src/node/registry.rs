@@ -181,6 +181,7 @@ impl Handler<SetActiveNode> for NodeRegistry {
           })
           .await??;
       } else {
+        tracing::error!(node_id, "set active node: node not found");
         self.ping.send(SetActiveAddress { address: None }).await??;
       }
     } else {

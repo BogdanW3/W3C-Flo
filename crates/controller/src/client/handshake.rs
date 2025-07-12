@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use flo_net::connect::*;
 use flo_net::packet::*;
 use flo_net::stream::FloStream;
@@ -8,7 +10,7 @@ use crate::player::token::validate_player_token;
 use flo_constants::version::Version;
 
 pub async fn handle_handshake(stream: &mut FloStream) -> Result<ConnectState> {
-  let req: PacketClientConnect = stream.recv().await?;
+  let req: PacketClientConnect = stream.recv_timeout(Duration::from_secs(3)).await?;
   let client_version = req.connect_version.extract()?;
 
   tracing::debug!("client version = {}", client_version);

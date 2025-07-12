@@ -81,9 +81,10 @@ impl<'a> LobbyHandler<'a> {
     );
     let base_t = Instant::now();
     let mut reported = false;
-
+    tracing::info!("LobbyHandler: Starting");
     loop {
       tokio::select! {
+        // TODO: Check if this has the potential to be a deadlock
         next = self.stream.recv() => {
           let pkt = next?;
           if let Some(pkt) = pkt {
@@ -96,7 +97,7 @@ impl<'a> LobbyHandler<'a> {
             if join_state.is_ready() {
               // report to node that all players have joined
               if !reported {
-                tracing::debug!("all join packets received");
+                tracing::info!("all join packets received");
                 if let Some(node_stream) = self.node_stream.as_mut() {
                   node_stream.report_slot_status(SlotClientStatus::Joined).await.ok();
                 }
@@ -108,6 +109,7 @@ impl<'a> LobbyHandler<'a> {
                 }
               }
               if join_state.should_start() {
+                tracing::info!("LobbyHandler: All players have joined, starting game");
                 self.send_start().await?;
                 return Ok(LobbyAction::Start)
               }
@@ -128,6 +130,7 @@ impl<'a> LobbyHandler<'a> {
                   join_state.status = Some(status);
                   if join_state.should_start() {
                     self.send_start().await?;
+                    tracing::info!("LobbyHandler is starting game");
                     return Ok(LobbyAction::Start)
                   }
                 },
@@ -169,10 +172,11 @@ impl<'a> LobbyHandler<'a> {
           tracing::debug!("lobby countdown notify received");
         }
         _ = sleep(Duration::from_secs(6)) => {
-          tracing::debug!("lobby countdown notify timeout");
+          tracing::warn!("lobby countdown notify timeout");
         }
       }
     } else {
+      tracing::warn!("lobby countdown notify not set");
       sleep(Duration::from_secs(3)).await;
     }
 

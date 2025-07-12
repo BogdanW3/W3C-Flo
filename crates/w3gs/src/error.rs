@@ -6,6 +6,8 @@ use crate::protocol::constants::PacketTypeId;
 pub enum Error {
   #[error("stream closed unexpectedly")]
   StreamClosed,
+  #[error("Game stream timed out")]
+  GameStreamTimeout,
   #[error("IPv6 is not supported")]
   Ipv6NotSupported,
   #[error("payload size overflow")]

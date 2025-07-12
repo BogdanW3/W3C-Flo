@@ -507,7 +507,7 @@ impl ControllerStream {
 
     let mut stream = FloStream::connect_no_delay(addr).await?;
 
-    tracing::info!("connected to controller");
+    tracing::info!("FloStream to controller established");
 
     stream
       .send(proto::PacketClientConnect {

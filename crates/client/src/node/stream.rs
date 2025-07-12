@@ -124,7 +124,7 @@ struct Session {
 impl Session {
   async fn run(mut self) {
     let mut reconnect_backoff = ExponentialBackoff {
-      initial_interval: Duration::from_secs(1),
+      initial_interval: Duration::from_millis(100),
       max_interval: Duration::from_secs(5),
       max_elapsed_time: Some(Duration::from_secs(60)),
       ..Default::default()
@@ -144,10 +144,13 @@ impl Session {
 
         loop {
           if self.last_connected_at.is_some() {
+            tracing::info!("Reconnecting to node");
             self
               .send_private_message("Reconnecting to the server...")
               .await
               .ok();
+          } else {
+            tracing::info!("Connecting to node");
           }
 
           tokio::select! {
@@ -170,7 +173,13 @@ impl Session {
                     _ => {
                       if let Some(delay) = reconnect_backoff.next_backoff() {
                         tracing::error!("connect node error: {:?}", err);
-                        sleep(delay).await;
+                        tokio::select! {
+                          _ = sleep(delay) => {},
+                          _ = ct.cancelled() => {
+                            tracing::info!("session cancelled during backoff");
+                            break 'main None;
+                          }
+                        }
                       } else {
                         tracing::error!("connect node: timeout");
                         break 'main None;
@@ -190,7 +199,12 @@ impl Session {
       let res = conn.run(&mut stream, &mut self).await;
       match res {
         Ok(res) => match res {
-          ConnectionRunResult::Cancelled | ConnectionRunResult::GameDisconnected => {
+          ConnectionRunResult::Cancelled => {
+            tracing::info!("node session cancelled");
+            break 'main Some(stream);
+          }
+          ConnectionRunResult::GameDisconnected => {
+            tracing::info!("node session game disconnected");
             break 'main Some(stream);
           }
           ConnectionRunResult::NodeDisconnected => {
@@ -201,7 +215,16 @@ impl Session {
               tracing::error!("node disconnected unexpectedly");
             }
             if let Some(delay) = reconnect_backoff.next_backoff() {
-              sleep(delay).await;
+              tokio::select! {
+                _ = sleep(delay) => {},
+                _ = self.ct.cancelled() => {
+                  tracing::info!("session cancelled during reconnect backoff");
+                  break 'main Some(stream);
+                }
+              }
+            } else {
+              tracing::error!("reconnect backoff timeout exceeded");
+              break 'main Some(stream);
             }
           }
           ConnectionRunResult::NodeLeft => {
@@ -297,6 +320,7 @@ impl Session {
 
   async fn connect(&self) -> Result<(FloStream, Connection)> {
     let mut stream = FloStream::connect_no_delay(self.addr).await?;
+    tracing::info!("FloStream to node established");
 
     stream
       .send(proto::PacketClientConnect {
@@ -373,6 +397,7 @@ impl Session {
       }
     };
     let mut stream = FloStream::connect_no_delay(self.addr).await?;
+    tracing::info!("Retry shutdown: FloStream to node established");
 
     stream
       .send(proto::PacketClientConnect {

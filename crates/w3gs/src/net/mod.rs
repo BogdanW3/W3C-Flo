@@ -4,7 +4,9 @@ use futures::{ready, StreamExt};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
+use tokio::time::timeout;
 use tokio_stream::Stream;
 use tokio_util::codec::Framed;
 
@@ -13,6 +15,8 @@ use crate::protocol::packet::{Packet, PacketPayload, PacketPayloadDecode};
 
 mod codec;
 use self::codec::W3GSCodec;
+
+const GAME_STREAM_CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Debug)]
 pub struct W3GSListener {
@@ -59,7 +63,9 @@ pub struct W3GSStream {
 
 impl W3GSStream {
   pub async fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self> {
-    let socket = TcpStream::connect(addr).await?;
+    let socket = timeout(GAME_STREAM_CONNECT_TIMEOUT, TcpStream::connect(addr))
+      .await
+      .map_err(|_elapsed| Error::GameStreamTimeout)??;
     Ok(W3GSStream {
       local_addr: socket.local_addr()?,
       peer_addr: None,

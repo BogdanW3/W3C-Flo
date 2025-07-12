@@ -16,7 +16,7 @@ use crate::error::*;
 use crate::packet::{FloPacket, Frame};
 use tokio::io::AsyncWriteExt;
 
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(3);
 
 #[derive(Debug)]
 pub struct FloStream {
@@ -26,7 +26,9 @@ pub struct FloStream {
 
 impl FloStream {
   pub async fn connect_no_delay<A: ToSocketAddrs>(addr: A) -> Result<Self> {
-    let socket = TcpStream::connect(addr).await?;
+    let socket = timeout(DEFAULT_TIMEOUT, TcpStream::connect(addr))
+      .await
+      .map_err(|_elapsed| Error::StreamTimeout)??;
 
     socket.set_nodelay(true).ok();
 
@@ -41,7 +43,9 @@ impl FloStream {
   }
 
   pub async fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self> {
-    let socket = TcpStream::connect(addr).await?;
+    let socket = timeout(DEFAULT_TIMEOUT, TcpStream::connect(addr))
+      .await
+      .map_err(|_elapsed| Error::StreamTimeout)??;
 
     // not supported by tokio atm
     //socket.set_keepalive(Some(Duration::from_secs(30)))?;
