@@ -275,7 +275,12 @@ impl PingCollectActor {
           SendTimeoutError::Timeout(_) => PingError::SenderTimeout,
           SendTimeoutError::Closed(_) => PingError::SenderGone,
         };
-        tracing::error!(address = self.address_str(), error_type = ?error, "Ping error: {}", error);
+        match error {
+          PingError::SenderTimeout => { /* Do nothing for sender timeout */ }
+          _ => {
+            tracing::error!(address = self.address_str(), error_type = ?error, "Ping error: {}", error);
+          }
+        }
         self.add_result(None, ctx);
       }
     }

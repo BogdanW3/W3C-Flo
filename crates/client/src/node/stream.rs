@@ -140,6 +140,9 @@ impl Session {
           .unwrap_or(false)
         {
           reconnect_backoff.reset();
+        } else if self.last_connected_at.is_some() && reconnect_backoff.next_backoff().is_none() {
+          tracing::error!("reconnect backoff timeout exceeded");
+          break 'main None;
         }
 
         loop {
@@ -168,11 +171,12 @@ impl Session {
                   use flo_net::proto::flo_node::ClientConnectRejectReason;
                   match err {
                     Error::NodeConnectionRejected(reason, _) if reason != ClientConnectRejectReason::Multi => {
+                      tracing::error!("Node connection rejected: {:?}", reason);
                       break 'main None;
                     },
                     _ => {
                       if let Some(delay) = reconnect_backoff.next_backoff() {
-                        tracing::error!("connect node error: {:?}", err);
+                        tracing::error!("Will reconnect after node error: {:?}", err);
                         tokio::select! {
                           _ = sleep(delay) => {},
                           _ = ct.cancelled() => {
@@ -222,9 +226,6 @@ impl Session {
                   break 'main Some(stream);
                 }
               }
-            } else {
-              tracing::error!("reconnect backoff timeout exceeded");
-              break 'main Some(stream);
             }
           }
           ConnectionRunResult::NodeLeft => {
