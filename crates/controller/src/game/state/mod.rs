@@ -155,8 +155,8 @@ impl GameRegistry {
 
 #[async_trait]
 impl Actor for GameRegistry {
-  async fn started(&mut self, ctx: &mut Context<Self>) {
-    self.handle(ctx, RemoveExpiredGames).await;
+  async fn started(&mut self, _ctx: &mut Context<Self>) {
+    //self.handle(ctx, RemoveExpiredGames).await;
   }
 }
 
