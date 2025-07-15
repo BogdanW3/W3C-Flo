@@ -117,7 +117,7 @@ impl LanProxy {
           .notify(LanEvent::LanGameDisconnected { game_id })
           .await
           .ok();
-        tracing::debug!("exiting");
+        tracing::info!("lan proxy: exited");
       }
       .instrument(tracing::debug_span!("worker"))
     });
@@ -179,7 +179,7 @@ impl State {
       let dropped = scope.left();
       let collect_player_events = self.collect_player_events(event_rx, stop_rx, &self.info);
     }
-
+    tracing::info!("lan proxy: started");
     // Lobby
     let mut stream = loop {
       let mut incoming = listener.incoming();
@@ -196,7 +196,7 @@ impl State {
         }
       };
 
-      tracing::debug!("connected");
+      tracing::info!("lan proxy: connected");
 
       let mut stream: W3GSStream = match next {
         Ok(Some(stream)) => stream,
@@ -230,11 +230,13 @@ impl State {
           }
         }
       };
+      tracing::info!("lan proxy: lobby action: {:?}", lobby_action);
       match lobby_action {
         LobbyAction::Start => break stream,
         LobbyAction::Leave => continue,
       }
     };
+    tracing::info!("lan proxy: lobby ended");
 
     stop_collect_player_events_tx
       .send(())
@@ -246,7 +248,7 @@ impl State {
 
     let mut deferred_in_packets = vec![];
     let mut deferred_out_packets = vec![];
-
+    
     // Load Screen
     {
       let load_screen = self.handle_load_screen(
@@ -271,7 +273,7 @@ impl State {
         }
       }
 
-      tracing::debug!("all player loaded");
+      tracing::info!("lan proxy: all player loaded");
     };
 
     // Game Loop
@@ -388,7 +390,7 @@ impl State {
     let my_player_id = info.game.player_id;
     let my_slot_player_id = info.slot_info.my_slot_player_id;
     let mut loaded_sent = vec![];
-
+    tracing::info!("lan proxy: loading screen started");
     node_stream
       .report_slot_status(SlotClientStatus::Loading)
       .await?;

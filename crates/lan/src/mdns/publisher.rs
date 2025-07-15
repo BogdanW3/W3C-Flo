@@ -120,7 +120,7 @@ impl MdnsPublisher {
       }
     }
 
-    tracing::debug!("exiting");
+    tracing::info!("MdnsPublisher worker: exiting");
     Ok(())
   }
 

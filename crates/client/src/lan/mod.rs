@@ -73,7 +73,7 @@ impl Handler<ReplaceLanGame> for Lan {
       .map(|g| g.is_same_game(game_id, my_player_id))
       == Some(true)
     {
-      tracing::debug!("skip create: same game");
+      tracing::info!(game_id, "ReplaceLanGame: lan game skip create: same game");
       return Ok(());
     }
 
@@ -86,6 +86,10 @@ impl Handler<ReplaceLanGame> for Lan {
 
     if checksum.sha1 == game.map_sha1 {
       if let Some(last_game) = self.active_game.take() {
+        tracing::info!(
+          last_game_id = last_game.game_id(),
+          "ReplaceLanGame: shutting down last game"
+        );
         last_game.shutdown();
       }
 
