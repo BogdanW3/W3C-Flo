@@ -26,20 +26,28 @@ impl StreamServer {
 
   pub async fn serve(mut self) -> Result<()> {
     while let Some(transport) = self.listener.incoming().try_next().await? {
-      let handler = Handler {
-        dispatcher: self.dispatcher.clone(),
-        transport,
-      };
-      tokio::spawn(async move {
-        if let Err(err) = handler.run().await {
-          tracing::error!("stream handler: {}", err);
-        }
-      });
+      let dispatcher = self.dispatcher.clone();
+
+      // Spawn the handler in a separate async block to simplify trait resolution
+      tokio::spawn(Self::handle_connection(dispatcher, transport));
     }
     Ok(())
   }
+
+  // Extract the handler logic into a separate async function to avoid complex trait resolution
+  async fn handle_connection(dispatcher: Addr<Dispatcher>, transport: FloStream) {
+    let handler = Handler {
+      dispatcher,
+      transport,
+    };
+
+    if let Err(err) = handler.run().await {
+      tracing::error!("stream handler: {}", err);
+    }
+  }
 }
 
+// Explicitly implement Send for Handler to help the compiler
 struct Handler {
   dispatcher: Addr<Dispatcher>,
   transport: FloStream,
@@ -79,31 +87,92 @@ impl Handler {
         return Ok(None);
       }
     };
-    let (meta, game) = match self
+    let dispatcher_send_result = self
       .dispatcher
       .send(GetGameInfo {
         game_id: token.game_id,
       })
-      .await?
-    {
-      Ok(game) => game,
-      Err(err) => {
-        match err {
-          Error::GameNotFound(_) => {
-            self
-              .reject(ObserverConnectRejectReason::GameNotFound, None)
-              .await?;
+      .await;
+
+    let (meta, game) = match dispatcher_send_result {
+      Ok(result) => match result {
+        Ok(game) => game,
+        Err(err) => {
+          match err {
+            Error::GameNotFound(_) => {
+              self
+                .reject(ObserverConnectRejectReason::GameNotFound, None)
+                .await?;
+            }
+            err => {
+              tracing::error!(game_id = token.game_id, "get game: {}", err);
+              self
+                .reject(ObserverConnectRejectReason::GameNotReady, None)
+                .await?;
+            }
           }
-          err => {
-            tracing::error!(game_id = token.game_id, "get game: {}", err);
-            self
-              .reject(ObserverConnectRejectReason::GameNotReady, None)
-              .await?;
-          }
+          return Ok(None);
         }
+      },
+      Err(err) => {
+        tracing::error!(game_id = token.game_id, "dispatcher send error: {}", err);
+        self
+          .reject(ObserverConnectRejectReason::GameNotReady, None)
+          .await?;
         return Ok(None);
       }
     };
+
+    // If a game is password protected, request the password from the client
+    if let Some(expected_password_hash) = &game.flo_tv_password_sha256 {
+      if expected_password_hash.is_empty() {
+        // Skip password protection for empty password hash
+      } else {
+        use flo_net::observer::{PacketObserverPasswordRequest, PacketObserverPasswordResponse};
+        use tokio::time::{timeout, Duration};
+
+        // Send "password requested" packet to the client
+        self
+          .transport
+          .send(PacketObserverPasswordRequest {})
+          .await?;
+
+        // Await password response with a 120 seconds timeout
+        let password_response = match timeout(
+          Duration::from_secs(120),
+          self.transport.recv::<PacketObserverPasswordResponse>(),
+        )
+        .await
+        {
+          Ok(Ok(response)) => response,
+          Ok(Err(err)) => {
+            tracing::error!(game_id = token.game_id, "password response error: {}", err);
+            self
+              .reject(ObserverConnectRejectReason::PasswordResponseError, None)
+              .await?;
+            return Ok(None);
+          }
+          Err(_) => {
+            tracing::info!(game_id = token.game_id, "password response timeout");
+            self
+              .reject(ObserverConnectRejectReason::PasswordTimeout, None)
+              .await?;
+            return Ok(None);
+          }
+        };
+
+        // Verify password by comparing SHA256 hashes
+        if &password_response.password_sha256 != expected_password_hash {
+          tracing::info!(game_id = token.game_id, "incorrect password provided");
+          self
+            .reject(ObserverConnectRejectReason::IncorrectPassword, None)
+            .await?;
+          return Ok(None);
+        }
+
+        tracing::info!(game_id = token.game_id, "password verification successful");
+      }
+    }
 
     let start_time = meta.started_at.timestamp();
     let now = (SystemTime::now().duration_since(SystemTime::UNIX_EPOCH))

@@ -174,6 +174,7 @@ pub struct CreateGameParams {
   pub map: Wc3Map,
   pub is_private: bool,
   pub is_live: bool,
+  pub flo_tv_password_sha256: Option<String>,
 }
 
 /// Creates a game, make the creator as the first player
@@ -210,6 +211,7 @@ pub fn create(conn: &DbConn, params: CreateGameParams) -> Result<Game> {
     enable_ping_equalizer: false,
     flo_tv_delay_override_secs: None,
     map_twelve_p: meta.map.twelve_p,
+    flo_tv_password_sha256: params.flo_tv_password_sha256,
   };
 
   let row = conn.transaction(|| -> Result<_> {
@@ -236,6 +238,7 @@ pub struct CreateGameAsBotParams {
   pub mask_player_names: bool,
   pub enable_ping_equalizer: bool,
   pub flo_tv_delay_override_secs: Option<i32>,
+  pub flo_tv_password_sha256: Option<String>,
 }
 
 /// Creates a full game and lock it
@@ -355,6 +358,7 @@ pub fn create_as_bot(
     enable_ping_equalizer: params.enable_ping_equalizer,
     flo_tv_delay_override_secs: params.flo_tv_delay_override_secs,
     map_twelve_p: meta.map.twelve_p,
+    flo_tv_password_sha256: params.flo_tv_password_sha256,
   };
 
   let row = conn.transaction(|| -> Result<_> {
@@ -1070,6 +1074,7 @@ pub struct GameRowWithRelated {
   pub enable_ping_equalizer: bool,
   pub flo_tv_delay_override_secs: Option<i32>,
   pub map_twelve_p: bool,
+  pub flo_tv_password_sha256: Option<String>,
 }
 
 pub(crate) type GameRowWithRelatedColumns = (
@@ -1094,6 +1099,7 @@ pub(crate) type GameRowWithRelatedColumns = (
   game::dsl::enable_ping_equalizer,
   game::dsl::flo_tv_delay_override_secs,
   game::dsl::map_twelve_p,
+  game::dsl::flo_tv_password_sha256,
 );
 
 impl GameRowWithRelated {
@@ -1120,6 +1126,7 @@ impl GameRowWithRelated {
       game::dsl::enable_ping_equalizer,
       game::dsl::flo_tv_delay_override_secs,
       game::dsl::map_twelve_p,
+      game::dsl::flo_tv_password_sha256,
     )
   }
 
@@ -1147,6 +1154,7 @@ impl GameRowWithRelated {
       game_version: self.game_version,
       enable_ping_equalizer: self.enable_ping_equalizer,
       flo_tv_delay_override_secs: self.flo_tv_delay_override_secs,
+      flo_tv_password_sha256: self.flo_tv_password_sha256,
     })
   }
 }
@@ -1168,6 +1176,7 @@ pub struct GameInsert<'a> {
   pub enable_ping_equalizer: bool,
   pub flo_tv_delay_override_secs: Option<i32>,
   pub map_twelve_p: bool,
+  pub flo_tv_password_sha256: Option<String>,
 }
 
 #[derive(Debug, Insertable)]

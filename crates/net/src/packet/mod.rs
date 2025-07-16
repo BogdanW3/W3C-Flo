@@ -294,6 +294,10 @@ pub enum PacketTypeId {
   ObserverData,
   #[bin(value = 0x64)]
   ObserverDataEnd,
+  #[bin(value = 0x65)]
+  ObserverPasswordRequest,
+  #[bin(value = 0x66)]
+  ObserverPasswordResponse,
 
   #[bin(value = 0xF7)]
   W3GS,

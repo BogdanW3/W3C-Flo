@@ -33,6 +33,7 @@ pub struct Game {
   pub game_version: Option<String>,
   pub enable_ping_equalizer: bool,
   pub flo_tv_delay_override_secs: Option<i32>,
+  pub flo_tv_password_sha256: Option<String>,
 }
 
 impl S2ProtoPack<flo_net::proto::flo_connect::GameInfo> for Game {
@@ -56,6 +57,7 @@ impl S2ProtoPack<flo_net::proto::flo_connect::GameInfo> for Game {
       random_seed: self.random_seed,
       created_by: self.created_by.pack()?,
       mask_player_names: self.mask_player_names,
+      flo_tv_password_sha256: self.flo_tv_password_sha256,
     })
   }
 }

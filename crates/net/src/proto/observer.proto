@@ -20,6 +20,14 @@ message PacketObserverConnectReject {
   google.protobuf.Int64Value delay_ends_at = 2;
 }
 
+message PacketObserverPasswordRequest {
+  // Request password from client
+}
+
+message PacketObserverPasswordResponse {
+  string password_sha256 = 1;
+}
+
 enum ObserverConnectRejectReason {
   ObserverConnectRejectReasonUnknown = 0;
   ObserverConnectRejectReasonObserverVersionTooOld = 1;
@@ -27,6 +35,9 @@ enum ObserverConnectRejectReason {
   ObserverConnectRejectReasonGameNotFound = 3;
   ObserverConnectRejectReasonGameNotReady = 4;
   ObserverConnectRejectReasonDelayNotOver = 5;
+  ObserverConnectRejectReasonIncorrectPassword = 6;
+  ObserverConnectRejectReasonPasswordTimeout = 7;
+  ObserverConnectRejectReasonPasswordResponseError = 8;
 }
 
 message GameInfo {
@@ -37,6 +48,7 @@ message GameInfo {
   int32 random_seed = 5;
   string game_version = 6;
   int64 start_time_millis = 7;
+  optional string flo_tv_password_sha256 = 8;
 }
 
 message Map {

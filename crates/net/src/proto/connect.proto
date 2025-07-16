@@ -214,6 +214,7 @@ message GameInfo {
   int32 random_seed = 10;
   PlayerInfo created_by = 11;
   bool mask_player_names = 12;
+  optional string flo_tv_password_sha256 = 13;
 }
 
 message Slot {

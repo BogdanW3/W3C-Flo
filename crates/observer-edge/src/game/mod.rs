@@ -190,6 +190,7 @@ impl GameHandler {
           .clone()
           .ok_or_else(|| Error::GameVersionUnknown)?,
         start_time_millis: (self.initial_arrival_time * 1000.) as i64,
+        flo_tv_password_sha256: game.flo_tv_password_sha256.clone(),
       },
     ))
   }
@@ -496,6 +497,7 @@ pub struct Game {
   pub is_private: bool,
   pub is_live: bool,
   pub flo_tv_delay_override_secs: Option<i32>,
+  pub flo_tv_password_sha256: Option<String>,
 }
 
 #[derive(Debug, S2ProtoUnpack, SimpleObject)]
