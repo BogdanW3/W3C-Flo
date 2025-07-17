@@ -27,6 +27,7 @@ use parking_lot::Mutex;
 use s2_grpc_utils::S2ProtoPack;
 use std::sync::Arc;
 use tokio::sync::mpsc::{channel, Receiver, Sender, WeakSender};
+use tokio::sync::oneshot;
 use tracing_futures::Instrument;
 use std::error::Error as StdError;
 
@@ -50,6 +51,7 @@ impl Session {
       controller_client,
       observer_client,
       current_observer_host: Mutex::new(None),
+      pending_password_request: Arc::new(Mutex::new(None)),
     });
     tokio::spawn(
       {
@@ -140,6 +142,7 @@ struct Worker {
   controller_client: Addr<ControllerClient>,
   observer_client: Addr<ObserverClient>,
   current_observer_host: Mutex<Option<ObserverHostShared>>,
+  pending_password_request: Arc<Mutex<Option<oneshot::Sender<String>>>>,
 }
 
 impl Worker {
@@ -249,7 +252,13 @@ impl Worker {
           .await??;
       }
       IncomingMessage::WatchGame(msg) => {
-        let res = self.observer_client.send(msg).await?;
+        // Create a password callback that communicates with the upstream application
+        let password_callback = self.create_password_callback(reply_sender.clone());
+        
+        let res = self.observer_client.send(crate::observer::WatchGame {
+          token: msg.token,
+          password_callback: Box::new(password_callback),
+        }).await?;
         match res {
           Ok(shared) => {
             reply_sender
@@ -285,8 +294,56 @@ impl Worker {
         };
         reply_sender.send(reply).await?;
       }
+      IncomingMessage::FloTvPasswordSubmit(msg) => {
+        let mut pending_request = self.pending_password_request.lock();
+        if let Some(sender) = pending_request.take() {
+          // Send the password to the waiting observer connection
+          if let Err(_) = sender.send(msg.password_sha256) {
+            tracing::warn!("Failed to send password to observer connection - receiver may have been dropped");
+          }
+        } else {
+          tracing::warn!("Received FloTvPasswordSubmit but no pending password request");
+        }
+      }
     }
     Ok(())
+  }
+
+  fn create_password_callback(&self, reply_sender: Sender<OutgoingMessage>) -> impl Fn() -> Option<String> {
+    let pending_request = self.pending_password_request.clone();
+    move || {
+      let (tx, rx) = oneshot::channel();
+      
+      // Store the sender for later use when password is submitted
+      {
+        let mut pending = pending_request.lock();
+        *pending = Some(tx);
+      }
+      
+      // Send password required message to upstream
+      let reply_sender = reply_sender.clone();
+      tokio::spawn(async move {
+        if let Err(err) = reply_sender.send(OutgoingMessage::FloTvPasswordRequired).await {
+          tracing::error!("Failed to send FloTvPasswordRequired message: {}", err);
+        }
+      });
+      
+      // Wait for password with timeout
+      let rt = tokio::runtime::Handle::current();
+      rt.block_on(async {
+        match tokio::time::timeout(std::time::Duration::from_secs(120), rx).await {
+          Ok(Ok(password)) => Some(password),
+          Ok(Err(_)) => {
+            tracing::warn!("Password request was cancelled");
+            None
+          }
+          Err(_) => {
+            tracing::warn!("Password request timed out");
+            None
+          }
+        }
+      })
+    }
   }
 
   async fn get_client_info_message(&self) -> Result<OutgoingMessage> {

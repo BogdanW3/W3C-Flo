@@ -40,6 +40,8 @@ pub enum Error {
   ConnectionRequestRejected(flo_types::game::RejectReason),
   #[error("Connection request rejected by server: {0:?}")]
   ObserverConnectionRequestRejected(flo_net::observer::ObserverConnectRejectReason),
+  #[error("Password required but no password callback provided")]
+  PasswordCallbackRequired,
   #[error("Local game info not yet received")]
   LocalGameInfoNotFound,
   #[error("Unable to get client platform info: {0}")]

@@ -34,7 +34,12 @@ impl FloWsClient {
   pub async fn watch(&self, token: String) -> Result<()> {
     let obs = self._registry.resolve::<ObserverClient>().await?;
 
-    obs.send(WatchGame { token }).await??;
+    obs
+      .send(WatchGame {
+        token,
+        password_callback: Box::new(|| None),
+      })
+      .await??;
 
     Ok(())
   }

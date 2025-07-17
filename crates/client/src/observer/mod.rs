@@ -38,8 +38,13 @@ impl Service<StartConfig> for ObserverClient {
   }
 }
 
-#[derive(Debug, Deserialize, Clone)]
 pub struct WatchGame {
+  pub token: String,
+  pub password_callback: Box<dyn Fn() -> Option<String> + Send + Sync>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct WatchGameMessage {
   pub token: String,
 }
 
@@ -52,10 +57,12 @@ impl Handler<WatchGame> for ObserverClient {
   async fn handle(
     &mut self,
     ctx: &mut flo_state::Context<Self>,
-    WatchGame { token }: WatchGame,
+    WatchGame {
+      token,
+      password_callback,
+    }: WatchGame,
   ) -> Result<ObserverHostShared> {
     let config = self.platform.send(GetClientConfig).await?;
-    tracing::debug!("stats host: {}", config.stats_host);
 
     let (game, source) = NetworkSource::connect(
       &format!(
@@ -64,6 +71,7 @@ impl Handler<WatchGame> for ObserverClient {
         flo_constants::OBSERVER_SOCKET_PORT
       ),
       token,
+      password_callback,
     )
     .await?;
     let host =

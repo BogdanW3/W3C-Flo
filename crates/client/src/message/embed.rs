@@ -52,8 +52,8 @@ impl FloEmbedClientHandle {
     Ok(())
   }
 
-  pub async fn watch(&self, token: String) -> Result<ObserverHostShared> {
-    Ok(self.observer_client.send(WatchGame { token }).await??)
+  pub async fn watch(&self, token: String, password_callback: Box<dyn Fn() -> Option<String> + Send + Sync>) -> Result<ObserverHostShared> {
+    Ok(self.observer_client.send(WatchGame { token, password_callback }).await??)
   }
 
   pub async fn get_client_platform_info(&self, force_reload: bool) -> Result<ClientPlatformInfo> {

@@ -11,7 +11,6 @@ use flo_net::proto::flo_connect::{
 };
 
 use crate::error::{Error, Result};
-use crate::observer::WatchGame;
 use crate::ping::PingUpdate;
 use crate::platform::PlatformStateError;
 pub use flo_types::game::{
@@ -37,8 +36,9 @@ pub enum IncomingMessage {
   KillTestGame,
   SetNodeAddrOverrides(SetNodeAddrOverrides),
   ClearNodeAddrOverrides,
-  WatchGame(WatchGame),
+  WatchGame(crate::observer::WatchGameMessage),
   WatchGameSetSpeed(WatchGameSetSpeed),
+  FloTvPasswordSubmit(FloTvPasswordSubmit),
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -78,6 +78,7 @@ pub enum OutgoingMessage {
   LanGameJoined(LanGameJoined),
   GenericFloError(GenericFloError),
   MdnsError(ErrorMessage),
+  FloTvPasswordRequired,
 }
 
 impl FromStr for IncomingMessage {
@@ -252,4 +253,9 @@ pub struct StartTestGame {
 #[derive(Debug, Serialize, Clone)]
 pub struct LanGameJoined {
   pub lobby_name: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct FloTvPasswordSubmit {
+  pub password_sha256: String,
 }

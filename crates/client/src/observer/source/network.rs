@@ -1,7 +1,10 @@
 use crate::error::{Error, Result};
 use bytes::Buf;
 use flo_net::{
-  observer::{PacketObserverConnect, PacketObserverConnectAccept, PacketObserverConnectReject},
+  observer::{
+    PacketObserverConnect, PacketObserverConnectAccept, PacketObserverConnectReject,
+    PacketObserverPasswordRequest, PacketObserverPasswordResponse,
+  },
   stream::FloStream,
 };
 use flo_observer::record::GameRecordData;
@@ -29,7 +32,11 @@ impl Drop for NetworkSource {
 }
 
 impl NetworkSource {
-  pub async fn connect<A: ToSocketAddrs>(addr: A, token: String) -> Result<(GameInfo, Self)> {
+  pub async fn connect<A: ToSocketAddrs>(
+    addr: A,
+    token: String,
+    password_callback: Box<dyn Fn() -> Option<String> + Send + Sync>,
+  ) -> Result<(GameInfo, Self)> {
     let ct = CancellationToken::new();
 
     let mut transport = FloStream::connect(addr).await?;
@@ -40,17 +47,35 @@ impl NetworkSource {
       })
       .await?;
 
-    let reply = transport.recv_frame().await?;
+    // Handle connection response with potential password request
+    let (game, delay_secs): (GameInfo, Option<i64>) = loop {
+      let reply = transport.recv_frame().await?;
 
-    let (game, delay_secs): (GameInfo, Option<i64>) = flo_net::try_flo_packet! {
-      reply => {
-        p: PacketObserverConnectAccept => {
-          tracing::debug!("observer server version: {:?}", p.version);
-          (GameInfo::unpack(p.game)?, p.delay_secs)
+      match flo_net::try_flo_packet! {
+        reply => {
+          p: PacketObserverConnectAccept => {
+            tracing::debug!("observer server version: {:?}", p.version);
+            break (GameInfo::unpack(p.game)?, p.delay_secs);
+          }
+          p: PacketObserverConnectReject => {
+            return Err(Error::ObserverConnectionRequestRejected(p.reason()).into())
+          }
+          p: PacketObserverPasswordRequest => {
+            // Game is password protected, request password from callback
+            let password = password_callback()
+              .ok_or(Error::PasswordCallbackRequired)?;
+
+            // Send password response
+            transport.send(PacketObserverPasswordResponse {
+              password_sha256: password,
+            }).await?;
+
+            // Continue loop to await final response
+            continue;
+          }
         }
-        p: PacketObserverConnectReject => {
-          return Err(Error::ObserverConnectionRequestRejected(p.reason()).into())
-        }
+      } {
+        _result => continue,
       }
     };
 
@@ -65,7 +90,7 @@ impl NetworkSource {
       .run(),
     );
 
-    Ok((game, Self { rx, ct, delay_secs}))
+    Ok((game, Self { rx, ct, delay_secs }))
   }
 
   pub fn delay_secs(&self) -> Option<i64> {
