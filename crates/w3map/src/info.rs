@@ -15,7 +15,9 @@ pub enum MapFormatVersion {
   #[bin(value = 31)]
   Reforged,
   #[bin(value = 32)]
-  Reforged6116,
+  Reforged32,
+  #[bin(value = 33)]
+  Reforged33,
   UnknownValue(u32),
 }
 
@@ -58,10 +60,12 @@ pub struct MapInfo {
   pub asset_modes: Option<AssetMode>,
   #[bin(condition = "version >= MapFormatVersion::Reforged")]
   pub data_version: Option<GameDataVersion>,
-  #[bin(condition = "version >= MapFormatVersion::Reforged6116")]
+  #[bin(condition = "version >= MapFormatVersion::Reforged32")]
   pub default_cam_distance: Option<u32>,
-  #[bin(condition = "version >= MapFormatVersion::Reforged6116")]
-  pub force_cam_distance: Option<u32>,
+  #[bin(condition = "version >= MapFormatVersion::Reforged32")]
+  pub max_cam_distance: Option<u32>,
+  #[bin(condition = "version >= MapFormatVersion::Reforged33")]
+  pub min_cam_distance: Option<u32>,
   pub num_players: u32,
   #[bin(condition = "version < MapFormatVersion::Reforged")]
   #[bin(repeat = "num_players")]
