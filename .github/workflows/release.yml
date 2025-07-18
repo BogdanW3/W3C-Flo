@@ -10,7 +10,7 @@ jobs:
     name: Build
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-2019, macos-13]
+        os: [ubuntu-latest, windows-2025, macos-13]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -85,6 +85,6 @@ jobs:
           prerelease: true
           automatic_release_tag: ${{ steps.branch-name.outputs.tag }}
           files: |
-            flo-windows-2019/*.zip
+            flo-windows-2025/*.zip
             flo-macos-13/*.zip
             flo-ubuntu-latest/*.zip
