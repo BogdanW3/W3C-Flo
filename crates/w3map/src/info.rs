@@ -239,3 +239,12 @@ fn test_fixed_player() {
   // assert_eq!(info.num_forces, 1);
   dbg!("{:#?}", info);
 }
+
+#[test]
+fn test_patch_203() {
+  let mut map = crate::open_archive(flo_util::sample_path!("map", "patch2.0.3.w3m")).unwrap();
+  let bytes = map.open_file("war3map.w3i").unwrap().read_all().unwrap();
+  let mut buf = bytes.as_slice();
+  let info = MapInfo::decode(&mut buf).unwrap();
+  dbg!("{:#?}", info);
+}
